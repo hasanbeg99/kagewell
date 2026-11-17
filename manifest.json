@@ -1,7 +1,7 @@
 {
-  "name": "Barrel Ninja",
-  "short_name": "Barrel Ninja",
-  "description": "Schwing dich im Fass durch einen endlosen Brunnen – ausweichen oder zuschlagen.",
+  "name": "Kagewell",
+  "short_name": "Kagewell",
+  "description": "Ein Ninja im Fass, ein Seil, ein Knoten: Stau die Kletterer am Knoten und lass sie im richtigen Moment abstürzen.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

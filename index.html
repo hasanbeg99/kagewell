@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Barrel Ninja">
-<title>Barrel Ninja</title>
+<meta name="apple-mobile-web-app-title" content="Kagewell">
+<title>Kagewell</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -110,12 +110,11 @@
 <div id="wrap"><div id="stage">
   <canvas id="game"></canvas>
 
-  <div id="rotate" aria-live="polite"><div class="ph"></div><p>Bitte Gerät hochkant drehen</p><small>Barrel Ninja spielt sich nur im Hochformat</small></div>
+  <div id="rotate" aria-live="polite"><div class="ph"></div><p>Bitte Gerät hochkant drehen</p><small>Kagewell spielt sich nur im Hochformat</small></div>
   <div id="hud" class="hidden">
     <div id="hudLeft">
       <div class="pill" style="flex-direction:column;align-items:stretch;gap:4px"><div style="display:flex;gap:6px;align-items:center"><span class="num" id="score">0</span><span id="combo"></span></div><div id="comboBar" class="hidden"><i id="comboFill"></i></div></div>
-      <div class="pill" id="barrelPill"><span class="bicon" id="bicon"></span><span id="barrelTxt">Fass</span></div>
-      <div class="pill"><span class="coin"></span><span class="num" id="coins" style="font-size:13px">0</span></div>
+            <div class="pill"><span class="coin"></span><span class="num" id="coins" style="font-size:13px">0</span></div>
     </div>
     <div id="hudCenter"><div id="depth">0 m</div><div id="depthBest">Rekord 0 m</div></div>
     <div id="hudRight">
@@ -125,15 +124,15 @@
   </div>
 
   <div class="overlay dim" id="menu">
-    <h1 class="title">Barrel<br><span>Ninja</span></h1>
-    <p class="subtitle">Tief im alten Brunnen</p>
+    <h1 class="title">Kage<span>well</span></h1>
+    <p class="subtitle">Der Brunnen der Schatten</p>
     <div class="card" style="margin-top:22px">
       <ul class="howto">
-        <li><span class="k">↔</span><span>Wische irgendwo: Der Ninja schwingt zur Seite und pendelt zurück.</span></li>
-        <li><span class="k">↕</span><span>Hoch = Seil kürzer, runter = Seil länger. Wisch in eine Richtung – Ecken mit zwei Wischern.</span></li>
-        <li><span class="k">⚔</span><span>Wisch seitlich zu einem Gegner = Schwerthieb.</span></li>
-        <li><span class="k red">!</span><span>Der Kobold schneidet dein Seil: <b>nach oben wischen!</b></span></li>
-        <li><span class="k">▣</span><span>Das Fass hält einen Treffer aus. Danach bist du schneller, aber verwundbar.</span></li>
+        <li><span class="k">1×</span><span><b>Tippe irgendwo:</b> Knoten ins Seil. Er hält alles auf, was herunterklettert – und reißt dein Fass ein Stück hoch.</span></li>
+        <li><span class="k">2×</span><span><b>Tippe nochmal:</b> Knoten lösen. Alle am Knoten stürzen ab. Mehr auf einmal = viel mehr Punkte.</span></li>
+        <li><span class="k red">7</span><span>Mehr als 6 am Knoten – das Seil reißt. Der Seilschneider sägt am Knoten: schnell lösen!</span></li>
+        <li><span class="k">↔</span><span>Fledermäuse greifen auf Fasshöhe an. Jeder Tipp bringt dich hoch oder runter – aus der Bahn.</span></li>
+        <li><span class="k">▥</span><span>Dein Seil ist begrenzt. Jeder Abwurf bringt Seil zurück. Jede Daube, die bricht, kostet dich Leben.</span></li>
       </ul>
     </div>
     <div class="card" style="margin-top:10px;padding:12px 18px"><div class="mhead" style="margin-top:0">Missionen · <span style="color:var(--gold)">🪙 <span id="menuCoins">0</span></span></div><ul class="missions" id="menuMissions"></ul></div>
@@ -142,7 +141,7 @@
       <button class="btn" id="playBtn">Spielen</button>
       <button class="btn ghost small" id="tutBtn">Tutorial</button>
     </div>
-    <div class="kbd">Tastatur: Pfeile / WASD · P = Pause</div>
+    <div class="kbd">Ein Finger reicht · Tastatur: Leertaste · P = Pause</div>
   </div>
 
   <div class="overlay dim hidden" id="pause">
@@ -173,7 +172,7 @@
         <button class="btn" id="againBtn">Nochmal</button>
         <button class="btn ghost" id="overMenuBtn">Menü</button>
       </div>
-      <div class="tapHint">Tippen oder wischen = nochmal</div>
+      <div class="tapHint">Tippen = nochmal</div>
     </div>
   </div>
 
@@ -195,120 +194,49 @@
    Mirrors design/balancing-spec.json v0.2 (keys 1:1 where possible).
    Times in ms, depth in m. See design/BALANCE_KEYS.md.
    ===================================================================== */
-const BUILD = 'v0.3-wellen';   // Build-Marker (Deploy-Check)
+const BUILD = 'v1.0-kagewell';   // Build-Marker (Deploy-Check)
+/* =====================================================================
+   BALANCE – alle Werte für Schwierigkeit, Spawns und Punkte (Kagewell v1.0, Kern „Knotenfass“).
+   Zeiten in ms, Tiefe in m, Pixel in Welt-Einheiten (Bildschirmhöhe = 800). {start, perMeter, min/max} = linear nach Tiefe.
+   balance.json kann jeden Schlüssel überschreiben (tiefes Merge beim Start).
+   ===================================================================== */
 const BALANCE = {
-  version: '0.3',
-  world: { metersPerScreen: 10, rowMeters: 1.5 },            // 1 screen (800 units) = 10 m → 80 units/m, 1 row = 120 units
-  grid: {
-    moveDurationMs: { barrel: 95, noBarrel: 75 },
-    moveOvershoot: 0.6,            // (v0.3) easeOutBack-Faktor beim Hinschwingen (0 = easeOutCubic)
-    returnDelayMs: { barrel: 560, noBarrel: 460 },
-    returnDurationMs: 170,
-    returnOvershoot: 1.25,
-    returnHoldIfRestCellThreatened: true,
-    comboHoldSyncPct: 1.0,         // 2nd axis input refreshes the other axis' hold → beide Achsen pendeln gemeinsam zurück
-    cornerMergeMs: 150,            // (v0.3) zwei Wischer innerhalb dieses Fensters = eine Eckbewegung (gemeinsames Ankommen, ein Swipe-Sound)
-    swipeMinDp: 24,                // erster Wischer eines Strichs (CSS-px)
-    chainSwipeMinDp: 18,           // weitere Richtungswechsel im selben Strich
-    swipeAnchorResetStillMs: 120,  // Finger ruht so lange (< 15 px/s) → neuer Ankerpunkt, gleiche Richtung wieder erlaubt
-    sameDirNeedsPause: true,       // gleiche Richtung im selben Strich nur nach kurzer Ruhe (kein Doppel-Auslösen)
-    flickFallbackMinDp: 16, flickFallbackMaxMs: 320,   // pointerup: kurzer Flick, der unter swipeMinDp blieb, zählt trotzdem
-    axisBiasHorizontal: 1.15,      // 45°-Wischer → horizontal (Angriff)
-    inputBufferMs: 90
-  },
-  attack: { reachCells: 1, activeMs: 150, recoveryMs: { barrel: 60, noBarrel: 40 }, hitStopMs: 50,
-    slashBufferMs: 250,            // (v0.3) Hieb während Cooldown wird gepuffert statt verschluckt
-    cancelRecoveryOnReverse: true  // Gegenrichtung bricht Erholung/Hieb sofort ab (L-R-L-Ketten)
-  },
+  version: '1.0',
+  world: { metersPerScreen: 10 },
   perf: { maxDpr: 2, lowDpr: 1.5, downgradeP95Ms: 22, upgradeP95Ms: 14, hudUpdateMs: 100, maxDtMs: 100 },
-  scroll: { speedMps: { start: 0.8, perMeter: 0.0035, max: 2.2 }, noBarrelSpeedMult: 1.0 },
-  behaviour: {
-    attackGapMs: { start: 1300, perMeter: -1.5, min: 700 },
-    windupMs: { start: 900, perMeter: -1.125, min: 450 },
-    maxConcurrentAttacks: [ { fromM: 0, value: 1 }, { fromM: 30, value: 2 }, { fromM: 150, value: 3 }, { fromM: 300, value: 4 } ],
-    blockedIdleExtendMs: 300,      // fairness.decisionsQueue
-    maxBlockedRetries: 8,          // (impl.) after that the enemy gives up and scrolls away
-    rowPick: { top: 1, mid: 1.3, bottom: 1, pass: 0.15 }   // (impl.) which grid row a wall enemy settles on; pass = scrolls by without settling
-  },
-  wallDensity: [ { fromM: 0, value: 2.4 }, { fromM: 40, value: 2.5 }, { fromM: 150, value: 3 } ],   // wall enemies per screen (10 m) per wall
-  // (v0.3) Heißer Start: 3 Gegner liegen schon bereit, erste Bedrohung nach ~1,5 s
-  opening: { hotStart: true, preplaced: [ { side: 1, row: 0, y: 350, idleMs: 400 }, { side: -1, row: 0, y: 520, idleMs: 500 }, { side: 1, row: -1, y: 700, idleMs: 600 } ], firstCoinsM: 1.5 },
-  // (v0.3) Wellen mit Atempausen: aktiv → Pause (keine neuen Angriffe, Münzen) → aktiv …
-  waves: { activeMs: [ { fromM: 0, value: 8000 }, { fromM: 100, value: 11000 }, { fromM: 250, value: 14000 } ],
-    restMs: [ { fromM: 0, value: 3000 }, { fromM: 100, value: 2500 }, { fromM: 250, value: 2000 } ],
-    gapMultStart: 1.35, gapMultEnd: 0.7, restScrollMult: 0.9, surgeEvery: 5, surgeGapMult: 0.8, surgeBonus: 250 },
-  // (v0.3) Ab 400 m alle 100 m eine Stufe härter (Telegraph bleibt ≥ 450 ms)
-  escalation: { fromM: 400, everyM: 100, concurrentPlus: 1, concurrentCap: 5, waveActivePlusMs: 1000, waveRestMinusMs: 250, waveRestMinMs: 1200,
-    attackGapMinusMs: 50, attackGapMinMs: 500 },
-  enemies: {
-    krabbler: { fromM: 0, hp: 1, points: 25, idleMs: [400, 1200],
-      attacks: {
-        jab:  { weight: 70, durationMs: 250, reachCols: 2, recoverMs: 500 },
-        leap: { weight: 30, fromM: 60, windupBonusMs: 100, crossMs: { start: 1100, min: 800 }, landsOnOppositeWall: true }
-      } },
-    fledermaus: { fromM: 50, hp: 1, points: 40, idleMs: [600, 1500],
-      attacks: {
-        cross: { weight: 75, crossMs: { start: 1400, perMeter: -1.25, min: 900 }, sineAmplitudeRows: 0.3, hitsOnlyOwnRow: true },
-        swoop: { weight: 25, fromM: 200, windupBonusMs: 150, crossMs: 1100, rowChange: 1 }
-      } },
-    seilschneider: { fromM: 90, hp: 1, points: 100, descendMs: { start: 2600, min: 1800 }, cutMs: { start: 2200, min: 1600 },
-      rampToM: 400,                // (impl.) start→min interpolated linearly between fromM and rampToM
-      vulnerableFromDescendPct: 0.5, cooldownMs: 10000, maxConcurrent: 1, countsAsActiveAttack: true },
-    stacheln: { fromM: 20, lengthCols: [ { fromM: 20, value: 1 }, { fromM: 180, value: 2, chance: 0.3 } ], heightRows: [1, 2] },
-    beisspflanze: { fromM: 160, hp: 1, points: 60, crackMs: { start: 900, min: 600 }, rampToM: 400, biteMs: 200, stayMs: 900, retractMs: 300,
-      centerFromM: 220, maxConcurrent: 1, cooldownMs: 3500 },
-    spuckpflanze: { fromM: 300, hp: 1, points: 80, crackMs: 900, aimMs: 500, projectileMs: 450, stayMs: 1800, retractMs: 300, maxConcurrent: 1, cooldownMs: 3500 }
-  },
-  spawnWeights: [
-    { fromM: 0,   krabbler: 100, stacheln: 0,  fledermaus: 0,  seilschneider: 0,  beisspflanze: 0,  spuckpflanze: 0 },
-    { fromM: 20,  krabbler: 75,  stacheln: 25, fledermaus: 0,  seilschneider: 0,  beisspflanze: 0,  spuckpflanze: 0 },
-    { fromM: 50,  krabbler: 55,  stacheln: 20, fledermaus: 25, seilschneider: 0,  beisspflanze: 0,  spuckpflanze: 0 },
-    { fromM: 90,  krabbler: 45,  stacheln: 20, fledermaus: 25, seilschneider: 10, beisspflanze: 0,  spuckpflanze: 0 },
-    { fromM: 160, krabbler: 35,  stacheln: 18, fledermaus: 25, seilschneider: 10, beisspflanze: 12, spuckpflanze: 0 },
-    { fromM: 300, krabbler: 28,  stacheln: 18, fledermaus: 24, seilschneider: 10, beisspflanze: 12, spuckpflanze: 8 }
-  ],
-  fairness: {
-    minWindupMs: 450,
-    minGapBetweenConflictingImpactsMs: 350,
-    alwaysOneSafeCellReachableInOneSwipe: true,
-    neverAllThreeCellsOfARowBlocked: true,
-    noBackWallInTopRowWhileCutterActive: true,
-    keepTopRowFreeWhileCutterVulnerable: true,   // (v0.3) solange der Seilschneider angreifbar ist, keine neuen Angriffe auf die obere Reihe
-    minWindupCornerOnlyMs: 700,                   // (v0.3) nur Ecke als Ausweg (= 2 Wischer) erst ab diesem Ausholen
-    noBackWallInCellNinjaJustLeftWithinMs: 400,
-    spikeLookAheadMs: 500           // (impl.) spikes count as "threatening" a cell this long before they reach it
-  },
+  scroll: { speedMps: { start: 0.65, perMeter: 0.004, max: 1.6 }, restMult: 0.85 },
+  // Seil = Vorrat UND Tiefe: Absinken verbraucht Seil, ein Knoten bindet Seil, jeder Abwurf bringt Seil zurück
+  rope: { startM: 30, maxM: 45, lowM: 8, perClimberM: 1.6, bigBonusPct: 0.12 },
+  knot: { ropeM: 1.1, jerkPx: 88, tieMs: 170, untieMs: 240, maxStack: 6, slotPx: 28, tapCooldownMs: 110, strainFrom: 4, sagPerWeightPx: 2.2 },
+  nearMiss: { px: 62, points: 50, hitStopMs: 55, comboRefillPct: 0.5 },
+  release: { pointsBase: 10, pow: 2, repairAt: 5, cutterBonus: 150 },   // Punkte = 10 · n² · Combo
+  barrel: { daubes: 6, invulnMs: 700, cutterDamage: 2 },
+  climber: { intervalMs: { start: 2500, perMeter: -9, min: 800 }, speedPx: { start: 80, perMeter: 0.45, max: 185 },
+    pairFromM: 35, pairChance: { start: 0.15, perMeter: 0.002, max: 0.45 }, tripleFromM: 120, tripleChance: 0.25, groupGapPx: 46, minGapPx: 30 },
+  cutter: { fromM: 70, cooldownMs: 15000, chance: 0.18, speedPx: 55, cutMs: { start: 3400, perMeter: -4, min: 2200 }, weight: 2 },
+  // Fledermäuse greifen auf Fasshöhe von der Seite an: Knoten (hoch) oder Lösen (runter) = Ausweichen
+  bat: { fromM: 22, intervalMs: { start: 6500, perMeter: -12, min: 2600 }, enterMs: 450, windupMs: { start: 1150, perMeter: -2, min: 560 },
+    crossMs: { start: 950, perMeter: -1.2, min: 620 }, bandPx: 44, maxConcurrent: [ { fromM: 0, value: 1 }, { fromM: 180, value: 2 } ], dodgeBonus: 30 },
+  opening: { firstClimberMs: 1400 },
+  waves: { activeMs: [ { fromM: 0, value: 9000 }, { fromM: 100, value: 11000 }, { fromM: 250, value: 14000 } ],
+    restMs: [ { fromM: 0, value: 3000 }, { fromM: 100, value: 2500 }, { fromM: 250, value: 2000 } ], surgeEvery: 5, surgeBonus: 250 },
   score: {
     pointsPerMeter: 10,
-    // (v0.3) Combo-Stufen: Multiplikator gilt für ALLE Punkte (auch Tiefe). Timer läuft ab → eine Stufe runter. Treffer → zurück auf x1
-    combo: { tiers: [ { streak: 0, mult: 1 }, { streak: 3, mult: 1.5 }, { streak: 6, mult: 2 }, { streak: 10, mult: 3 }, { streak: 15, mult: 4 }, { streak: 22, mult: 5 } ],
-      windowMs: [ 3500, 3500, 3300, 3100, 2900, 2700 ], maxMult: 5, onTimeout: 'dropTier', resetOnHit: true, appliesToDepth: true, pitchPerStreak: true },
-    nearMiss: { lateDodgeMs: 220, points: 25, comboRefillPct: 0.4 },     // Angriffsfeld kurz vor dem Einschlag verlassen
-    counter: { lastWindupMs: 250, mult: 1.5 },                           // Kill in den letzten ms des Ausholens
-    multiKill: { withinMs: 160, bonusPerExtra: 100 },
-    milestones: [ { m: 25, bonus: 100 }, { m: 50, bonus: 150 }, { m: 100, bonus: 300 }, { m: 150, bonus: 400 }, { m: 200, bonus: 500 }, { m: 300, bonus: 750 }, { m: 400, bonus: 1000 } ],   // (v0.3) kleiner, dafür × Combo
-    milestoneEveryMAfter: 100, milestoneBonusPerM: 2.5,
-    noBarrelScoreMult: 1.5
+    combo: { tiers: [ { streak: 0, mult: 1 }, { streak: 3, mult: 1.5 }, { streak: 7, mult: 2 }, { streak: 12, mult: 3 }, { streak: 18, mult: 4 }, { streak: 26, mult: 5 } ],
+      windowMs: [ 5000, 5000, 4700, 4400, 4100, 3800 ], maxMult: 5, onTimeout: 'dropTier', resetOnHit: true, appliesToDepth: true, pitchPerStreak: true },
+    milestones: [ { m: 25, bonus: 100 }, { m: 50, bonus: 150 }, { m: 100, bonus: 300 }, { m: 150, bonus: 400 }, { m: 200, bonus: 500 }, { m: 300, bonus: 750 }, { m: 400, bonus: 1000 } ],
+    milestoneEveryMAfter: 100, milestoneBonusPerM: 2.5
   },
   record: { markerWithinM: 10, hudCountdownWithinM: 30, chaseHintPct: 0.7 },
-  gameOver: { slowMoMs: 300, slowMoScale: 0.3, cardDelayMs: 600, inputLockAfterCardMs: 400 },   // Sperre zählt ab Erscheinen der Karte (Panik-Taps)
+  gameOver: { slowMoMs: 300, slowMoScale: 0.3, cardDelayMs: 650, inputLockAfterCardMs: 400 },
   missions: { active: 3 },
-  barrel: { invulnAfterBurstMs: 1000,
-    pickup: { minDepthAfterBurstM: 20, minSpacingM: 50, chancePer10m: 0.5, pityAfterM: 45, onlyWhenNoBarrel: true, stayMs: 4500, targetNinjaRow: true } },
-  pickups: { coins: { avgEveryM: 4, chainLength: 5, chainBonusCoins: 5, placeOnlyInSafeCells: true, chainSpacingM: 0.6 } },
-  tutorial: {
-    firstRunOnly: true, skippable: true, noDamageUntilMs: 30000, scrollMps: 0.6,
+  tutorial: { firstRunOnly: true, skippable: true, scrollMps: 0.45, climberSpeedPx: 70,
     steps: [
-      { atMs: 0,     text: 'Wisch, um dich zu bewegen', spawn: 'coinsSides' },
-      { atMs: 4000,  text: 'Ecken: zwei Wischer hintereinander', spawn: 'coinsDiagonal' },
-      { atMs: 9000,  text: 'Wisch zum Gegner = Angriff', spawn: 'tutKrabbler', idleMs: 2000, windupMs: 1200, slowMo: 0.5, waitUntilKilled: true },
-      { atMs: 14000, text: 'Stacheln: ausweichen', spawn: 'tutStacheln' },
-      { atMs: 18500, text: 'Angreifen oder Reihe wechseln', spawn: 'tutFledermaus', windupMs: 1200 },
-      { atMs: 23000, text: 'Er schneidet dein Seil! Nach oben wischen!', spawn: 'tutSeilschneider', descendMs: 4000, waitUntilKilled: true },
-      { atMs: 29000, text: 'Ein Treffer zerbricht dein Fass. Viel Glück!' },
-      { atMs: 32500, end: true }
-    ]
-  }
+      '1/3 · Tippe irgendwo = Knoten. Er hält den Kletterer auf.',
+      '2/3 · Tippe nochmal = Knoten lösen. Er stürzt ab!',
+      '3/3 · Mehr auf einmal = mehr Punkte! Warte auf alle drei.',
+      'Aber Vorsicht: Mehr als 6 am Knoten – und das Seil reißt.'
+    ] }
 };
 
 /* =====================================================================
@@ -331,7 +259,7 @@ const SHIELDS = [
 
 /* ===================================================================== STORAGE */
 const Store = {
-  key: 'barrelninja.v1',
+  key: 'kagewell.v1',
   data: { best:0, bestDepth:0, coins:0, muted:false, tutorialDone:false, loadout:{ outfit:'nacht', weapon:'zwillingsklingen', shield:'keins' } },
   load() { try { const d = JSON.parse(localStorage.getItem(this.key)); if (d) Object.assign(this.data, d); } catch(e){} this.save(); },
   save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch(e){} }
@@ -343,31 +271,29 @@ if (!Store.data.stats) Store.data.stats = { runs:0 };
    3 aktive Aufgaben mit Münz-Belohnung. "run" = innerhalb eines Laufs, sonst über alle Läufe summiert.
    Erledigte Missionen werden beim nächsten Lauf durch die nächste aus dem Pool ersetzt. */
 const MISSION_POOL = [
-  { id:'k10',    txt:'Besiege 10 Krabbler',               stat:'kill_krabbler', n:10,   reward:20 },
+  { id:'r3',     txt:'Lass 3 auf einmal abstürzen',       stat:'bigRelease', run:true, n:3, reward:20 },
   { id:'d50',    txt:'Erreiche 50 m',                     stat:'depth', run:true, n:50, reward:15 },
-  { id:'b80',    txt:'80 m ohne das Fass zu verlieren',   stat:'barrelDepth', run:true, n:80, reward:30 },
+  { id:'nm3',    txt:'Knote 3× knapp',                    stat:'nearMiss', n:3,  reward:25 },
+  { id:'k20',    txt:'Wirf 20 Kletterer ab',              stat:'dropped', n:20,  reward:25 },
   { id:'c2',     txt:'Erreiche Combo x2',                 stat:'mult', run:true, n:2,   reward:25 },
-  { id:'nm2',    txt:'Weiche 2× knapp aus',               stat:'nearMiss', n:2,  reward:25 },
-  { id:'kill25', txt:'Besiege 25 Gegner',                 stat:'kills', n:25,    reward:25 },
-  { id:'chain2', txt:'Sammle 2 volle Münzketten',         stat:'chain', n:2,     reward:20 },
-  { id:'co2',    txt:'2 Konter (Treffer beim Ausholen)',  stat:'counter', n:2,   reward:30 },
-  { id:'b150',   txt:'150 m ohne das Fass zu verlieren',  stat:'barrelDepth', run:true, n:150, reward:60 },
-  { id:'bat8',   txt:'Besiege 8 Fledermäuse',             stat:'kill_fledermaus', n:8, reward:30 },
+  { id:'dg3',    txt:'Weiche 3 Fledermäusen aus',         stat:'dodge', n:3, reward:30 },
+  { id:'cl60',   txt:'60 m ohne eine Daube zu verlieren', stat:'cleanDepth', run:true, n:60, reward:40 },
+  { id:'r5',     txt:'Lass 5 auf einmal abstürzen',       stat:'bigRelease', run:true, n:5, reward:50 },
   { id:'d150',   txt:'Erreiche 150 m',                    stat:'depth', run:true, n:150, reward:40 },
   { id:'s5k',    txt:'5000 Punkte in einem Lauf',         stat:'score', run:true, n:5000, reward:40 },
-  { id:'cut2',   txt:'Besiege 2 Seilschneider',           stat:'kill_seilschneider', n:2, reward:40 },
-  { id:'fass1',  txt:'Hol dir ein Fass zurück',           stat:'barrelBack', n:1, reward:30 },
+  { id:'cut1',   txt:'Schüttle einen Seilschneider ab',   stat:'cutterDrop', n:1, reward:40 },
   { id:'c3',     txt:'Erreiche Combo x3',                 stat:'mult', run:true, n:3,   reward:50 },
   { id:'runs5',  txt:'Spiele 5 Läufe',                    stat:'runs', n:5,      reward:20 },
   { id:'d250',   txt:'Erreiche 250 m',                    stat:'depth', run:true, n:250, reward:60 },
-  { id:'kill80', txt:'Besiege 80 Gegner',                 stat:'kills', n:80,    reward:60 },
+  { id:'k100',   txt:'Wirf 100 Kletterer ab',             stat:'dropped', n:100, reward:60 },
+  { id:'r6',     txt:'Volle Ladung: 6 auf einmal',        stat:'bigRelease', run:true, n:6, reward:80 },
   { id:'s15k',   txt:'15000 Punkte in einem Lauf',        stat:'score', run:true, n:15000, reward:80 },
   { id:'c5',     txt:'Erreiche Combo x5',                 stat:'mult', run:true, n:5,   reward:100 }
 ];
 const Missions = {
   get st() {
     let m = Store.data.missions;
-    if (!m || !Array.isArray(m.active)) m = Store.data.missions = { active:['k10','d50','b80'], prog:{}, done:[], next:3 };
+    if (!m || !Array.isArray(m.active)) m = Store.data.missions = { active:['r3','d50','nm3'], prog:{}, done:[], next:3 };
     return m;
   },
   def(id) { return MISSION_POOL.find(d => d.id === id); },
@@ -617,11 +543,9 @@ const vfx = BNVFX.create({ maxParticles: 280 });   // VFX-Modul (Pool, Hit-Stop,
 const scarf = BNNinjaAnim.createScarf();           // VFX Phase 2: Verlet-Schal (vfx/ninja-anim.js)
 const speed = BNNinjaAnim.createSpeedlines();      // Speedlines nur ohne Fass
 const ea = BNEnemyAnim.create({ vfx, balance: BALANCE });   // Gegner-Animationen + Leichen-Pool (vfx/enemy-anim.js)
-let spLastY = 0;
 const WORLD_H = 800;
 const PX_PER_M = WORLD_H / BALANCE.world.metersPerScreen;      // 80
-const ROW_H = BALANCE.world.rowMeters * PX_PER_M;               // 120
-const REST_Y = 290, ANCHOR_Y = -30, CUT_Y = 112;
+const REST_Y = 370, ANCHOR_Y = -30;
 let W = 400, scale = 1, dpr = 1, WALL_W = 34, COL_OFF = 100;
 const Quality = { low:false, dts:new Float32Array(120), n:0, lastSwitch:0 };   // adaptive Auflösung (perf.*)
 
@@ -654,191 +578,69 @@ function stepVal(arr, m){ if (typeof arr === 'number') return arr; let v = arr[0
 function deepMerge(t, src){ for (const k in src) { if (k[0] === '_') continue; const v = src[k];
   if (v && typeof v === 'object' && !Array.isArray(v) && t[k] && typeof t[k] === 'object' && !Array.isArray(t[k])) deepMerge(t[k], v); else t[k] = v; } return t; }
 function weighted(obj){ let tot=0; for (const k in obj) tot += Math.max(0,obj[k]); if (tot<=0) return null; let r=Math.random()*tot; for (const k in obj){ r -= Math.max(0,obj[k]); if (r<=0) return k; } return null; }
-const colX = c => W/2 + c*COL_OFF;
-const rowY = r => REST_Y + r*ROW_H;
 const wallX = side => side < 0 ? WALL_W + 15 : W - WALL_W - 15;
 const key = (c,r) => c + ',' + r;
 const CELLS = []; for (let r=-1;r<=1;r++) for (let c=-1;c<=1;c++) CELLS.push([c,r]);
 function circleRect(cx,cy,r, rx,ry,rw,rh){ const nx=clamp(cx,rx,rx+rw), ny=clamp(cy,ry,ry+rh); return (cx-nx)**2+(cy-ny)**2 < r*r; }
-
-/* ===================================================================== STATE */
+/* ===================================================================== STATE
+   Kern „Knotenfass“: Ein Tipp knotet das Seil über dem Fass (Fass ruckt hoch), alles, was herunterklettert,
+   staut sich am Knoten. Der nächste Tipp löst ihn: der Stapel stürzt ab → 10·n² Punkte und Seil zurück. */
 const G = {
-  state:'menu', time:0, depth:0, scoreF:0, kills:0, coinsRun:0, scrollPx:0,
+  state:'menu', time:0, depth:0, scoreF:0, coinsRun:0, scrollPx:0, rope:0,
   combo:{ streak:0, lastAt:-1e9, mult:1, tier:0 },
-  parts:{ depth:0, multBonus:0, kills:0, bonus:0, milestones:0 }, run:{}, wave:{ phase:'active', t:0, idx:0 },
-  recordDepth:0, recordHit:false, lastKillAt:-1e9, multiN:0, overShown:true,
-  ents:[], coins:[], fx:[], particles:[], texts:[], projectiles:[], deco:[], dust:[],
+  parts:{ depth:0, multBonus:0, release:0, bonus:0, milestones:0 }, run:{}, wave:{ phase:'active', t:0, idx:0 },
+  recordDepth:0, recordHit:false, overShown:true,
+  climbers:[], stack:[], fallers:[], bats:[], texts:[], deco:[], dust:[],
   hitStop:0, slowMo:1, bgOff:0, sideOff:0,
-  lastAttackStart:-1e9, cutterCooldownUntil:0, plantCooldownUntil:0,
-  nextSpawnM:{}, nextCoinM:0, nextDecoM:0, chainId:0,
-  pickup:{ burstDepth:null, lastDepth:-1e9, nextRollM:0 },
-  milestonesHit:{}, tutorial:null, deathReason:'', overAt:0, threats:new Set(), idSeq:1
+  nextClimbAt:0, nextBatAt:0, cutterCooldownUntil:0, lowWarned:false,
+  milestonesHit:{}, tutorial:null, deathReason:'', overAt:0, idSeq:1, snapY:0, snapLen:0, lastTapAt:-1e9, taps:0
 };
 const N = {
-  hx:0, vv:0, hT:0, vT:0, x:0, y:0, tw:{ x:null, y:null }, queue:[],
-  barrel:true, inv:0, slashT:0, slashDir:0, slashCD:0, upSlashT:0, flipT:0, prevCell:'0,0', leftCell:null, leftAt:-1e9,
-  dead:false, fall:{ vx:0, vy:0, spin:0 }, rot:0, vx:0, lastX:0, shieldCharges:0, slashBuf:null, lastMoveAt:{ x:-1e9, y:-1e9 }, lastSwipeSnd:-1e9
+  x:0, y:0, vx:0, knot:false, off:0, offFrom:0, offTo:0, offT:1, offDur:1, sag:0, prevY:0, lastToggleAt:-1e9,
+  daubes:6, inv:0, hitFlash:0, knotPop:0, slashT:0, slashDir:1, dead:false, fall:{ vx:0, vy:0, spin:0 }, lastX:0
 };
-const bodyR = () => N.barrel ? 26 : 16;
-const form = () => N.barrel ? 'barrel' : 'noBarrel';
+const CLIMB_REACH = 14;           // Kopf des Kletterers (nach unten) bis zur Mitte
+const STAVE_ORDER = [2, 4, 0, 5, 1, 3];   // Reihenfolge, in der Dauben herausbrechen
 
 function resetRun(tutorial) {
-  Object.assign(G, { time:0, depth:0, scoreF:0, kills:0, coinsRun:0, ents:[], coins:[], fx:[], particles:[], texts:[], projectiles:[],
-    hitStop:0, slowMo:1, lastAttackStart:-1e9, cutterCooldownUntil:0, plantCooldownUntil:0,
-    nextSpawnM:{ '-1': 2.5, '1': 0 }, nextCoinM: 3, chainId:0, chainGot:{}, milestonesHit:{}, nextMilestoneM:0, deathReason:'', threats:new Set(),
-    lastKillAt:-1e9, multiN:0, recordHit:false, overShown:true });
+  Object.assign(G, { time:0, depth:0, scoreF:0, coinsRun:0, climbers:[], stack:[], fallers:[], bats:[], texts:[],
+    hitStop:0, slowMo:1, rope: BALANCE.rope.startM, nextClimbAt: BALANCE.opening.firstClimberMs, nextBatAt: 0, cutterCooldownUntil: 0,
+    lowWarned:false, milestonesHit:{}, deathReason:'', recordHit:false, overShown:true, snapY:0, snapLen:0, lastTapAt:-1e9, taps:0 });
   vfx.clear(); ea.clear(); speed.clear(); scarf.reset();
   G.combo = { streak:0, lastAt:-1e9, mult:1, tier:0 };
-  G.parts = { depth:0, multBonus:0, kills:0, bonus:0, milestones:0 };
-  G.run = { nearMiss:0, counter:0, maxMult:1, barrelLost:false, kills:0 };
+  G.parts = { depth:0, multBonus:0, release:0, bonus:0, milestones:0 };
+  G.run = { nearMiss:0, maxMult:1, hurt:false, dropped:0, bestRelease:0, dodge:0, releases:0 };
   G.wave = { phase:'active', t:0, idx:0 };
   G.recordDepth = tutorial ? 0 : Store.data.bestDepth;
-  G.pickup = { burstDepth:null, lastDepth:-1e9, nextRollM:10 };
-  Object.assign(N, { hx:0, vv:0, hT:0, vT:0, x:colX(0), y:rowY(0), tw:{x:null,y:null}, queue:[], barrel:true, inv:0, slashT:0, slashDir:0, slashCD:0,
-    upSlashT:0, flipT:0, prevCell:'0,0', leftCell:null, leftAt:-1e9, dead:false, rot:0, vx:0, lastX:colX(0), shieldCharges: Loadout.shield.charges,
-    slashBuf:null, lastMoveAt:{ x:-1e9, y:-1e9 }, lastSwipeSnd:-1e9 });
-  spLastY = N.y;
-  G.tutorial = tutorial ? { t:0, step:0, waitId:null, waitStep:null } : null;
-  const op = BALANCE.opening;
-  if (!tutorial && op.hotStart) {   // heißer Start: Gegner liegen schon bereit (erste Bedrohung ≈ 1,5 s)
-    for (const p of op.preplaced) spawnWall(p.side, 'krabbler', { y: p.y, targetRow: p.row, idleOverride: p.idleMs });
-    G.nextSpawnM = { '-1': 6, '1': 8 }; G.nextCoinM = op.firstCoinsM;
-  } else if (!tutorial) spawnWall(1, 'krabbler', { y: WORLD_H - 140, targetRow: 0 });
+  Object.assign(N, { knot:false, off:0, offFrom:0, offTo:0, offT:1, offDur:1, sag:0, lastToggleAt:-1e9, daubes: BALANCE.barrel.daubes,
+    inv:0, hitFlash:0, knotPop:0, slashT:0, slashDir:1, dead:false, fall:{ vx:0, vy:0, spin:0 }, vx:0 });
+  N.x = W/2; N.y = REST_Y; N.prevY = N.y; N.lastX = N.x;
+  G.tutorial = tutorial ? { step:-1, st:0, t:0, released:0, best:0 } : null;
 }
 
-/* ===================================================================== NINJA MOVEMENT
-   3x3 grid: hx ∈ {-1,0,1}, vv ∈ {-1,0,1}. Each axis returns to 0 after returnDelayMs. */
-function tweenTo(axis, to, dur, back) { N.tw[axis] = { from:N[axis], to, t:0, dur:Math.max(1,dur), back }; if (!back) N.lastMoveAt[axis] = G.time; }
-function inTransit(axis) { const t = N.tw[axis]; return t && t.t < t.dur; }
-function ninjaCell() { return [clamp(Math.round((N.x - W/2)/COL_OFF),-1,1), clamp(Math.round((N.y - REST_Y)/ROW_H),-1,1)]; }
+/* ===================================================================== GEOMETRIE */
+function ninjaRot() { const dx = N.x - W/2, dy = N.y - ANCHOR_Y; return Math.atan2(-dx, dy) * 0.9 - clamp(N.vx, -900, 900) * 0.00025; }
+function ropeEnd() { const ang = ninjaRot(), d = 74; return { x: N.x + Math.sin(ang) * d, y: N.y - Math.cos(ang) * d, ang }; }
+function ropeXAt(y) { const e = ropeEnd(); const k = (y - ANCHOR_Y) / Math.max(1, e.y - ANCHOR_Y); return lerp(W/2, e.x, clamp(k, 0, 1)); }
+function knotY() { return ropeEnd().y - 16; }
+function slotY(w) { return knotY() - 14 - w * BALANCE.knot.slotPx; }   // Platz für das nächste Gewicht w (0 = direkt auf dem Knoten)
+function stackWeight() { let w = 0; for (const e of G.stack) w += e.weight; return w; }
+function strain() { return N.knot ? clamp(stackWeight() / BALANCE.knot.maxStack, 0, 1.2) : 0; }
+function maxRope() { return BALANCE.rope.maxM; }
 
-function input(dx, dy) {
-  if (G.state !== 'play' || N.dead) return;
-  N.queue.push({ dx, dy, at:G.time });
-  if (N.queue.length > 3) N.queue.shift();
-}
-function processQueue() {
-  while (N.queue.length) {
-    const it = N.queue[0];
-    // nur gleiche Richtung auf derselben Achse während der Bewegung puffern; Gegenrichtung/Rückweg bricht sofort ab
-    const busy = (it.dx && inTransit('x') && !N.tw.x.back && N.hx === it.dx) || (it.dy && inTransit('y') && !N.tw.y.back && N.vv === it.dy);
-    if (busy && G.time - it.at < BALANCE.grid.inputBufferMs) break;   // buffered, not lost
-    N.queue.shift(); applyInput(it.dx, it.dy);
-  }
-}
-function applyInput(dx, dy) {
-  const g = BALANCE.grid, mv = g.moveDurationMs[form()], hold = g.returnDelayMs[form()];
-  // Ecke = zwei Wischer: kommt der zweite Wischer kurz nach dem ersten, landen beide Achsen gemeinsam (eine Bewegung, ein Sound)
-  const merge = (ax) => { const t = N.tw[ax]; return t && !t.back && t.t < t.dur && G.time - N.lastMoveAt[ax] <= g.cornerMergeMs ? Math.max(40, t.dur - t.t) : 0; };
-  if (G.time - N.lastSwipeSnd > g.cornerMergeMs) { AudioMgr.play('swipe', { vol: dx ? 1 : 0.7 }); N.lastSwipeSnd = G.time; }
-  if (dy) {
-    if (dy !== N.vv) AudioMgr.play(dy < 0 ? 'rope_retract' : 'rope_extend');
-    const mx = merge('x');
-    N.vv = dy; N.vT = hold; tweenTo('y', rowY(dy), mx ? Math.max(mx, mv * 0.6) : mv);
-    if (N.hx && !dx) N.hT = Math.max(N.hT, hold * g.comboHoldSyncPct);
-    if (!N.barrel && N.hx === 0) N.flipT = 1;
-    if (dy < 0) tryKillCutter();
-  }
-  if (dx) {
-    const my = merge('y');
-    N.slashFrom = N.hx; N.hx = dx; N.hT = hold; tweenTo('x', colX(dx), my ? Math.max(my, mv * 0.6) : mv);
-    if (N.vv && !dy) N.vT = Math.max(N.vT, hold * g.comboHoldSyncPct);
-    startSlash(dx);
-  }
-}
-function returnBlocked(c, r) {
-  if (!BALANCE.grid.returnHoldIfRestCellThreatened) return false;
-  const [nc, nr] = ninjaCell();
-  return G.threats.has(key(c,r)) && !G.threats.has(key(nc,nr));
-}
-function updateNinja(dtMs) {
-  const g = BALANCE.grid;
-  processQueue();
-  if (N.hx) { N.hT -= dtMs; if (N.hT <= 0 && !inTransit('x') && !returnBlocked(0, N.vv)) { N.hx = 0; tweenTo('x', colX(0), g.returnDurationMs, true); } }
-  if (N.vv) { N.vT -= dtMs; if (N.vT <= 0 && !inTransit('y') && !returnBlocked(N.hx, 0)) { N.vv = 0; tweenTo('y', rowY(0), g.returnDurationMs, true); AudioMgr.ropeCreak(); } }
-  for (let i = 0; i < 2; i++) { const a = i ? 'y' : 'x';
-    const t = N.tw[a]; if (!t) continue;
-    t.t += dtMs; const p = Math.min(1, t.t/t.dur);
-    N[a] = t.from + (t.to - t.from) * (t.back ? easeOutBack(p, g.returnOvershoot) : g.moveOvershoot ? easeOutBack(p, g.moveOvershoot) : easeOutCubic(p));
-    if (p >= 1) { N[a] = t.to; }
-  }
-  if (!inTransit('x') && N.hx === 0) N.x = colX(0);
-  N.vx = (N.x - N.lastX) / Math.max(0.001, dtMs/1000); N.lastX = N.x;
-  N.inv = Math.max(0, N.inv - dtMs);
-  N.slashT = Math.max(0, N.slashT - dtMs); N.slashCD = Math.max(0, N.slashCD - dtMs); N.upSlashT = Math.max(0, N.upSlashT - dtMs);
-  if (N.slashBuf && N.slashCD <= 0) { const b = N.slashBuf; N.slashBuf = null;   // gepufferter Hieb (statt verschluckt)
-    if (G.time - b.at <= BALANCE.attack.slashBufferMs && N.hx === b.dir) { N.slashFrom = b.from; startSlash(b.dir); } }
-  N.flipT = Math.max(0, N.flipT - dtMs/350);
-  // track the cell the ninja just left (fairness: no back-wall spawn there for a moment)
-  const ck = key(...ninjaCell());
-  if (ck !== N.prevCell) { N.leftCell = N.prevCell; N.leftAt = G.time; N.prevCell = ck; }
-}
-
-/* ===================================================================== ATTACK */
-function startSlash(dir) {
-  const a = BALANCE.attack;
-  if (N.slashCD > 0) {
-    if (!(a.cancelRecoveryOnReverse && dir !== N.slashDir)) { N.slashBuf = { dir, at:G.time, from:N.slashFrom }; return; }
-  }
-  N.slashBuf = null;
-  N.slashT = a.activeMs; N.slashDir = dir; N.slashCD = a.activeMs + a.recoveryMs[form()];
-  vfx.slash(N.x, N.y, dir, { track:N, offsetY: N.barrel ? -18 : -4, radius: N.barrel ? 54 : 40, color: Loadout.weapon.trail, ms: a.activeMs });
-  scarf.impulse(-dir * 320, -160);
-  AudioMgr.play('sword_slash'); Haptics.buzz(8);
-}
-function entCell(e) {
-  if (e.onWall) return [e.side*2, e.row];
-  if (e.type === 'beisspflanze' || e.type === 'spuckpflanze') return [e.c, e.r];
-  const c = Math.abs(e.x - wallX(-1)) < 8 ? -2 : Math.abs(e.x - wallX(1)) < 8 ? 2 : clamp(Math.round((e.x - W/2)/COL_OFF), -2, 2);
-  return [c, e.colRow != null ? e.colRow : e.row];
-}
-function killable(e) {
-  if (e.dead) return false;
-  switch (e.type) {
-    case 'krabbler': case 'fledermaus': return e.state !== 'scroll' && e.state !== 'leave' ? true : e.y > 0 && e.y < WORLD_H && e.row != null;
-    case 'fass': return e.row != null;
-    case 'beisspflanze': return e.state === 'stay' || e.state === 'bite';
-    case 'spuckpflanze': return e.state === 'stay' || e.state === 'aim';
-    default: return false;
-  }
-}
-function checkSlashHits() {
-  if (N.slashT <= 0) return;
-  const dir = N.slashDir, tr = N.vv, reach = BALANCE.attack.reachCells;
-  // cells swept by the swing: every column passed on the way + reachCells beyond (±2 = wall)
-  const targets = [];
-  const from = (N.slashFrom === N.hx) ? N.hx : N.slashFrom + dir;
-  for (let c = from; dir > 0 ? c <= N.hx + dir*reach : c >= N.hx + dir*reach; c += dir) targets.push(key(clamp(c,-2,2), tr));
-  for (const e of G.ents) {
-    if (!killable(e)) continue;
-    const [c, r] = entCell(e);
-    if (r !== tr) continue;
-    if (targets.includes(key(c, r))) {
-      if (e.type === 'fass') collectBarrel(e); else killEnt(e);
-    }
-  }
-}
-function tryKillCutter() {
-  for (const e of G.ents) {
-    if (e.type !== 'seilschneider' || e.dead) continue;
-    const vuln = e.state === 'cut' || (e.state === 'descend' && e.t / e.descendMs >= BALANCE.enemies.seilschneider.vulnerableFromDescendPct);
-    N.upSlashT = 200; vfx.slash(N.x, N.y, 0, { track:N, offsetY: N.barrel ? -60 : -30, radius: 32, color: Loadout.weapon.trail });
-    if (vuln) killEnt(e);
-  }
-}
-/* ---- Combo / Punkte (v0.3): Stufen-Multiplikator x1 … x5 auf alle Punkte */
+/* ===================================================================== COMBO / PUNKTE */
 const TIER_COL = ['#F4F1EA', '#F4F1EA', '#4FF0FF', '#FFB347', '#FF5A6E', '#FF5A6E'];
 function comboWindow() { const w = BALANCE.score.combo.windowMs; return Array.isArray(w) ? w[Math.min(G.combo.tier, w.length - 1)] : w; }
 function setTier(t) {
   const tiers = BALANCE.score.combo.tiers; t = clamp(t, 0, tiers.length - 1);
   const up = t > G.combo.tier; G.combo.tier = t; G.combo.mult = Math.min(BALANCE.score.combo.maxMult, tiers[t].mult);
   if (up) { G.run.maxMult = Math.max(G.run.maxMult, G.combo.mult); Missions.runMax('mult', G.combo.mult);
-    G.texts.push({ x:N.x, y:N.y - 95, txt:'x' + G.combo.mult + '!', t:0, life:900, col:TIER_COL[t], size:34 });
+    G.texts.push({ x:N.x, y:N.y - 120, txt:'x' + G.combo.mult + '!', t:0, life:900, col:TIER_COL[t], size:34 });
     AudioMgr.play('ui_confirm', { vol:0.6, rate: 1 + t * 0.08 }); UI.comboPop(); }
 }
-function comboStep() {   // ein Kill
+function comboStep(n = 1) {
   const tiers = BALANCE.score.combo.tiers;
-  G.combo.streak++; G.combo.lastAt = G.time;
+  G.combo.streak += n; G.combo.lastAt = G.time;
   let t = 0; for (let i = 0; i < tiers.length; i++) if (G.combo.streak >= tiers[i].streak) t = i;
   if (t !== G.combo.tier) setTier(t);
 }
@@ -851,93 +653,134 @@ function comboDecay() {
   else { G.combo.streak = 0; G.combo.tier = 0; G.combo.mult = 1; }
 }
 function comboReset() { G.combo = { streak:0, lastAt:-1e9, mult:1, tier:0 }; }
-function popup(x, y, pts, extra, col) {   // Punkte-Popup, Größe nach Wert
-  const size = clamp(16 + Math.log2(Math.max(1, pts) / 10) * 4, 16, 32);
-  G.texts.push({ x, y, txt:'+' + pts + (extra ? ' ' + extra : ''), t:0, life:800, col: col || TIER_COL[G.combo.tier], size });
-}
-function addBonus(pts, x, y, label, col) {
+function addBonus(pts, x, y, label, col, size) {
   const p = Math.round(pts * G.combo.mult); G.scoreF += p; G.parts.bonus += p;
-  G.texts.push({ x, y, txt:label + ' +' + p, t:0, life:900, col, size:20 });
+  G.texts.push({ x, y, txt:label + ' +' + p, t:0, life:950, col, size: size || 20 });
   return p;
 }
-function nearMiss(e) {   // Angriffsfeld kurz vor dem Einschlag verlassen
-  const nm = BALANCE.score.nearMiss; if (!nm || G.tutorial) return;
-  if (!e.cells || !N.leftCell || G.time - N.leftAt > nm.lateDodgeMs) return;
-  if (!e.cells.includes(N.leftCell) || e.cells.includes(key(...ninjaCell()))) return;
-  addBonus(nm.points, N.x, N.y - 70, 'KNAPP!', '#4FF0FF');
-  if (G.combo.streak) G.combo.lastAt = Math.min(G.time, G.combo.lastAt + comboWindow() * nm.comboRefillPct);
-  G.run.nearMiss++; Missions.add('nearMiss'); AudioMgr.play('score_pickup', { vol:0.6, rate:1.4 });
-}
-function killEnt(e) {
-  e.dead = true;
-  const def = BALANCE.enemies[e.type] || { points:0 }, sc = BALANCE.score;
-  // Konter: Kill in den letzten ms des Ausholens
-  const counter = !G.tutorial && ((e.state === 'windup' && e.windupMs - e.t <= sc.counter.lastWindupMs) || (e.state === 'cut' && e.t < 400));
-  comboStep();
-  let pts = Math.round(def.points * G.combo.mult * (counter ? sc.counter.mult : 1));
-  G.scoreF += pts; G.parts.kills += pts; G.kills++; G.run.kills++;
-  const p = entPos(e);
-  popup(p.x, p.y - 20, pts, G.combo.mult > 1 ? 'x' + G.combo.mult : '');
-  if (counter) { G.texts.push({ x:p.x, y:p.y - 52, txt:'KONTER!', t:0, life:900, col:'#FFB347', size:24 }); G.run.counter++; Missions.add('counter'); }
-  if (G.time - G.lastKillAt <= sc.multiKill.withinMs) { G.multiN++; addBonus(sc.multiKill.bonusPerExtra * G.multiN, p.x, p.y - 80, G.multiN > 1 ? 'TRIPPEL!' : 'DOPPEL!', '#FF5A6E'); }
-  else G.multiN = 0;
-  G.lastKillAt = G.time;
-  Missions.add('kills'); Missions.add('kill_' + e.type);
-  // Treffer: Partikel aus dem Pool, 1-Frame-Flash, Hit-Stop (Spec attack.hitStopMs) + 4 px Shake – alles im VFX-Modul
-  vfx.hit(p.x, p.y, { type:e.type, colors: ENEMY_COLORS[e.type], dir: e.type === 'seilschneider' ? 0 : N.slashDir, hitStop: BALANCE.attack.hitStopMs + (counter ? 10 : 0), shake: counter ? 5 : 4 });
-  ea.kill(e, p.x, p.y + (e.yOff || 0));
-  fxClose(e, 250);
-  const rate = sc.combo.pitchPerStreak ? Math.pow(2, Math.min(G.combo.streak, 12) / 24) : 1;
-  AudioMgr.play('enemy_hit'); AudioMgr.play('enemy_death', { vol:0.8, delay:0.06, rate }); Haptics.buzz(25);
-  if (e.type === 'seilschneider') G.cutterCooldownUntil = G.time + BALANCE.enemies.seilschneider.cooldownMs;
-  if (G.tutorial && G.tutorial.waitId === e.id) G.tutorial.waitId = null;
-}
-function collectBarrel(e) {
-  e.dead = true; N.barrel = true; G.pickup.lastDepth = G.depth; Missions.add('barrelBack'); G.run.barrelSince = G.depth;
-  const p = entPos(e);
-  burst(p.x, p.y, 14, ['#FFB347','#FFE2A8','#8A5A2E'], 220); burst(N.x, N.y, 12, ['#FFE2A8','#FFB347'], 160);
-  G.texts.push({ x:N.x, y:N.y-60, txt:'Fass zurück!', t:0, life:1100, col:'#FFB347' });
-  AudioMgr.play('barrel_pickup'); Haptics.buzz([20,30,20]);
-}
-const ENEMY_COLORS = { krabbler:['#3B3F4A','#8C8F99','#FF5A2A'], fledermaus:['#241B3A','#B9C3D6','#FFC23A'], seilschneider:['#4E7A3A','#C7CED6','#2F5B4A'],
-  beisspflanze:['#2F5B4A','#4E7A3A','#E2283C'], spuckpflanze:['#2F5B4A','#4E7A3A','#E2283C'], fass:['#8A5A2E'] };
-// Wandriss-Handles (vfx.wallBreak) sicher ansprechen – Pool-Slots werden wiederverwendet, daher Generation prüfen
-function fxBreak(e) { if (e.fx && e.fx.on && e.fx.gen === e.fxGen && e.fx.state === 0) vfx.wallBreakNow(e.fx); }
-function fxClose(e, ms) { if (e.fx && e.fx.on && e.fx.gen === e.fxGen) vfx.wallClose(e.fx, ms); e.fx = null; }
-function entPos(e) { return { x: e.x ?? colX(e.c), y: e.y ?? rowY(e.r) }; }
-const _pos = { x:0, y:0 };
+function ropeText(dm, x, y) { if (Math.abs(dm) < 0.05) return; G.texts.push({ x, y, txt:(dm > 0 ? '+' : '') + dm.toFixed(1).replace('.', ',') + ' m Seil', t:0, life:1000, col: dm > 0 ? '#C9A66B' : '#EC7380', size:15 }); }
+function gainRope(dm) { if (G.tutorial) return 0; const before = G.rope; G.rope = clamp(G.rope + dm, 0, maxRope()); if (G.rope > BALANCE.rope.lowM) G.lowWarned = false; return G.rope - before; }
 
-/* ===================================================================== DAMAGE / GAME OVER */
-function hurt(src) {
-  if (N.inv > 0 || G.state !== 'play' || N.dead) return;
-  if (G.tutorial && G.tutorial.t < BALANCE.tutorial.noDamageUntilMs) {
-    N.inv = 700; G.texts.push({ x:N.x, y:N.y-50, txt:'Autsch! (Übung)', t:0, life:900, col:'#E2283C' }); Haptics.buzz(30); return;
+/* ===================================================================== EINGABE: EIN TIPP */
+function tap() {
+  if (G.state !== 'play' || N.dead) return false;
+  if (G.time - G.lastTapAt < BALANCE.knot.tapCooldownMs) return false;
+  G.lastTapAt = G.time; G.taps++;
+  if (!N.knot) tie(); else untie();
+  return true;
+}
+function setOff(to, dur) { N.offFrom = N.off; N.offTo = to; N.offT = 0; N.offDur = Math.max(1, dur); }
+function tie() {
+  const K = BALANCE.knot, nm = BALANCE.nearMiss, top = ropeEnd().y;
+  N.prevY = N.y; N.knot = true; N.lastToggleAt = G.time; N.knotPop = 1; N.slashT = 170; N.slashDir = -N.slashDir;
+  setOff(-K.jerkPx, K.tieMs);
+  if (!G.tutorial) { G.rope = Math.max(0, G.rope - K.ropeM); }
+  // Knapp geknotet: Kletterer schon fast am Fass
+  let near = 0, nx = N.x, ny = top;
+  for (const c of G.climbers) { const d = top - (c.y + CLIMB_REACH); if (d >= -6 && d <= nm.px) { near++; nx = c.x; ny = c.y; } }
+  const kx = ropeXAt(top - 16);
+  vfx.emit(kx, top - 16, 6, { kind:'fiber', colors:['rope', 'ropeShade'], speed:[40, 120], life:[300, 500], size:[0.8, 1.2], size2:[4, 7], g:200, drag:2, vr:8 });
+  AudioMgr.play('rope_retract', { vol:0.9 }); AudioMgr.play('swipe', { vol:0.45 }); Haptics.buzz(12);
+  if (near && !G.tutorial) {
+    addBonus(nm.points * near, nx + 40, ny - 10, near > 1 ? 'KNAPP x' + near + '!' : 'KNAPP!', '#4FF0FF', 24);
+    comboStep(near);
+    if (G.combo.streak) G.combo.lastAt = G.time;
+    vfx.hitStop(nm.hitStopMs); vfx.flash(nx, ny + 10, 30); vfx.slash(kx, top - 4, 0, { radius:46, ms:140 }); vfx.shake(3);
+    vfx.emit(nx, ny + 10, 10, { kind:'spark', color:'trail', speed:[200, 380], life:[120, 220], size:[1.2, 2], size2:[10, 18], g:0, drag:6, blend:'add' });
+    G.run.nearMiss += near; Missions.add('nearMiss', near);
+    AudioMgr.play('sword_slash', { vol:0.8 }); AudioMgr.play('score_pickup', { vol:0.6, rate:1.4, delay:0.04 }); Haptics.buzz([10, 20, 25]);
   }
+}
+function untie() {
+  const K = BALANCE.knot;
+  N.prevY = N.y; N.knot = false; N.lastToggleAt = G.time; N.slashT = 170; N.slashDir = -N.slashDir;
+  setOff(0, K.untieMs);
+  const ky = knotY(), kx = ropeXAt(ky);
+  vfx.emit(kx, ky, 8, { kind:'fiber', colors:['rope', 'ropeShade'], speed:[50, 160], life:[350, 600], size:[0.8, 1.2], size2:[4, 8], g:240, drag:2, vr:9 });
+  gainRope(K.ropeM);
+  AudioMgr.play('rope_extend', { vol:0.9 }); Haptics.buzz(10);
+  if (G.stack.length) release();
+}
+const BIG_LABEL = ['', '', 'DOPPEL!', 'DREIER!', 'VIERER!', 'FÜNFER!', 'VOLLE LADUNG!'];
+function release() {
+  const R = BALANCE.release, stack = G.stack, w = stackWeight(), n = stack.length;
+  G.stack = [];
+  let cx = 0, cy = 0, cutters = 0;
+  for (const e of stack) {
+    cx += e.x; cy += e.y;
+    if (e.type === 'seilschneider') cutters++;
+    toFaller(e, (e.side || 1) * rand(70, 170), rand(-90, 10));
+  }
+  cx /= n; cy /= n;
+  comboStep(w);
+  const pts = Math.round(R.pointsBase * Math.pow(w, R.pow) * G.combo.mult);
+  G.scoreF += pts; G.parts.release += pts;
+  const size = clamp(18 + w * 3, 18, 40);
+  G.texts.push({ x:cx + 44, y:cy, txt:'+' + pts, t:0, life:1000, col: TIER_COL[G.combo.tier], size });
+  if (w >= 2) G.texts.push({ x:W/2, y:cy - 40, txt: BIG_LABEL[Math.min(w, 6)] || 'WAHNSINN!', t:0, life:1100, col: w >= 5 ? '#FFB347' : '#F4F1EA', size: 22 + Math.min(w, 6) * 2 });
+  const gain = gainRope(BALANCE.rope.perClimberM * w * (1 + BALANCE.rope.bigBonusPct * (w - 1)));
+  if (gain > 0) ropeText(gain, WALL_W + 70, WORLD_H - 178);
+  G.coinsRun += w; Store.data.coins += w;
+  if (cutters) { G.cutterCooldownUntil = G.time + BALANCE.cutter.cooldownMs; Missions.add('cutterDrop', cutters);
+    addBonus(R.cutterBonus * cutters, W/2, cy - 80, 'SEILSCHNEIDER AB!', '#4FF0FF', 20); }
+  if (w >= R.repairAt && N.daubes < BALANCE.barrel.daubes && !G.tutorial) { N.daubes++; G.texts.push({ x:N.x, y:N.y + 60, txt:'Daube repariert!', t:0, life:1100, col:'#C9A66B', size:17 });
+    AudioMgr.play('barrel_pickup', { vol:0.6 }); }
+  // Effekte: Treffer-Funken am Stapel, Hit-Stop + Shake nach Größe
+  vfx.hit(cx, cy, { type:'krabbler', count: 8 + w * 3, hitStop: w >= 3 ? 40 + w * 3 : false, shake: Math.min(6, 1.5 + w), flashR: 20 + w * 4 });
+  if (w >= 4) { vfx.screenFlash(0.12 + w * 0.03); Haptics.buzz([20, 30, 40]); } else Haptics.buzz(20);
+  const rate = Math.pow(2, Math.min(G.combo.streak, 12) / 24);
+  AudioMgr.play('enemy_death', { vol:0.9, rate }); AudioMgr.play('enemy_hit', { vol:0.7, delay:0.03 });
+  AudioMgr.play('score_pickup', { vol:0.55, delay:0.08, rate: 1 + Math.min(w, 6) * 0.06 });
+  G.run.dropped += n; G.run.releases++; G.run.bestRelease = Math.max(G.run.bestRelease, w);
+  Missions.add('dropped', n); Missions.runMax('bigRelease', w);
+  if (G.tutorial) { G.tutorial.released += n; G.tutorial.best = Math.max(G.tutorial.best, w); }
+}
+function toFaller(e, vx, vy) {
+  e.stacked = false;
+  G.fallers.push({ type:e.type, x:e.x, y:e.y, vx, vy, rot: e.type === 'seilschneider' ? 0 : Math.PI, vr: rand(-7, 7), t:0, side:e.side || 1, id:e.id });
+}
+
+/* ===================================================================== SCHADEN / GAME OVER */
+function hurt(n, sx) {
+  if (N.dead || G.state !== 'play') return;
+  if (G.tutorial) { G.texts.push({ x:N.x, y:N.y - 60, txt:'Autsch! (Übung)', t:0, life:900, col:'#EC7380' }); vfx.barrelHit(N.x, N.y, Math.sign((sx ?? N.x) - N.x)); Haptics.buzz(25); return; }
+  if (N.inv > 0) return;
   if (BALANCE.score.combo.resetOnHit) comboReset();
-  if (N.shieldCharges > 0) { N.shieldCharges--; N.inv = 800; return; }   // stub for future shields
-  if (N.barrel) {
-    N.barrel = false; N.inv = BALANCE.barrel.invulnAfterBurstMs; G.pickup.burstDepth = G.depth; G.pickup.nextRollM = G.depth + 10; G.run.barrelLost = true;
-    // Fassbruch: Splitter, 2 Eisenring-Hälften, Staub, Hit-Stop 60 ms, Shake 6 px, Flash 0.4, Vignetten-Puls (VFX-Modul)
-    vfx.barrelBreak(N.x, N.y, { shake: 6 });
-    G.texts.push({ x:N.x, y:N.y-60, txt:'Fass zerbrochen!', t:0, life:1100, col:'#E2283C' });
-    AudioMgr.play('player_hit'); AudioMgr.play('barrel_break', { delay:0.03 }); Haptics.buzz([40,30,80]);
-  } else gameOver(src === 'rope' ? 'rope' : 'hit');
+  N.daubes = Math.max(0, N.daubes - n); N.inv = BALANCE.barrel.invulnMs; N.hitFlash = 1; G.run.hurt = true;
+  vfx.barrelHit(N.x, N.y, Math.sign((sx ?? N.x) - N.x) || 1);
+  AudioMgr.play('player_hit'); Haptics.buzz([30, 30, 50]);
+  if (N.daubes <= 0) { gameOver('barrel'); return; }
+  G.texts.push({ x:N.x, y:N.y + 66, txt: n > 1 ? n + ' Dauben weg!' : 'Daube weg!', t:0, life:1000, col:'#EC7380', size:18 });
+  vfx.vignette(0.6);
 }
 function gameOver(reason) {
   if (G.state !== 'play') return;
+  const top = ropeEnd().y;
   N.dead = true; G.deathReason = reason; G.state = 'dying'; G.overAt = performance.now(); G.overShown = false; G.overShownAt = null; G.slowMo = 1;
-  N.fall = { vx: reason === 'rope' ? 0 : rand(-80,80), vy: reason === 'rope' ? 40 : -260, spin: reason === 'rope' ? 1.5 : rand(-8,8) };
   vfx.shake(6); vfx.screenFlash(0.7); vfx.vignette(1);
-  if (reason === 'rope') { AudioMgr.play('rope_snap'); vfx.ropeSnap(ropeXAt(CUT_Y + 8), CUT_Y + 8, { shake: 6 }); }
-  else { AudioMgr.play('player_hit'); burst(N.x, N.y, 18, ['#1F2A5C','#E2283C','#E8C9A6'], 300); }
-  AudioMgr.setLoop('rope_cutting_loop', false); AudioMgr.play('game_over', { delay: reason === 'rope' ? 0.35 : 0.2 }); AudioMgr.musicOutOnOver(); Haptics.buzz(220);
+  if (reason === 'snap' || reason === 'cut') {
+    G.snapY = reason === 'cut' ? (G.stack.find(e => e.type === 'seilschneider') || { y: knotY() }).y - 4 : knotY() - 10;
+    G.snapLen = top - G.snapY;
+    N.fall = { vx: 0, vy: 40, spin: rand(-1.6, 1.6) };
+    for (const e of G.stack) toFaller(e, (e.side || 1) * rand(30, 120), rand(-40, 40));
+    G.stack = [];
+    AudioMgr.play('rope_snap'); vfx.ropeSnap(ropeXAt(G.snapY), G.snapY, { shake: 6 });
+  } else if (reason === 'rope') {
+    G.snapY = -40; G.snapLen = top + 40; N.fall = { vx: 0, vy: 0, spin: rand(-1, 1) };
+    AudioMgr.play('rope_snap'); vfx.ropeSnap(W/2, 10, { shake: 4 });
+  } else {
+    N.fall = { vx: rand(-80, 80), vy: -260, spin: rand(-8, 8) };
+    vfx.barrelBreak(N.x, N.y, { shake: 6 }); AudioMgr.play('barrel_break');
+    burst(N.x, N.y, 14, ['#1F2A5C', '#E2283C', '#E8C9A6'], 280);
+  }
+  N.knot = false;
+  AudioMgr.setLoop('rope_cutting_loop', false); AudioMgr.play('game_over', { delay: 0.3 }); AudioMgr.musicOutOnOver(); Haptics.buzz(220);
   const score = Math.floor(G.scoreF), isNew = score > Store.data.best, prevBestDepth = Store.data.bestDepth;
   if (isNew) Store.data.best = score;
   Store.data.bestDepth = Math.max(Store.data.bestDepth, Math.floor(G.depth));
   Missions.runMax('score', score);
-  Store.data.stats.runs = (Store.data.stats.runs || 0) + 1; if (!G.tutorial) Missions.add('runs');
+  Store.data.stats.runs = (Store.data.stats.runs || 0) + 1; Missions.add('runs');
   Store.save();
-  // Karte nach cardDelayMs (im Frame-Loop, kein setTimeout) – kurzer Todes-Moment, dann sofort weiter
   G.over = { score, isNew, depth: Math.floor(G.depth), coins: G.coinsRun, reason, prevBestDepth };
 }
 function showOverNow() {
@@ -946,378 +789,139 @@ function showOverNow() {
   if (o.isNew && o.score > 0) AudioMgr.play('new_highscore');
 }
 
-/* ===================================================================== SPAWNING */
-function rowPick() { const rp = BALANCE.behaviour.rowPick; const k = weighted({ '-1':rp.top, '0':rp.mid, '1':rp.bottom, pass:rp.pass }); return k === 'pass' ? null : +k; }
-function spawnWall(side, type, o = {}) {
-  const e = { id:G.idSeq++, type, side, x:wallX(side), y:o.y ?? WORLD_H + 50, state:'scroll', onWall:true, row:null, t:0,
-    targetRow: o.targetRow !== undefined ? o.targetRow : rowPick(), idleT:0, retries:0, anim:Math.random()*10, ...o };
-  G.ents.push(e); return e;
+/* ===================================================================== SPAWNS */
+function spawnClimber(y = -30, spd) {
+  const e = { id:G.idSeq++, type:'krabbler', weight:1, x:W/2, y, speed: spd || ramp(BALANCE.climber.speedPx, G.depth), side: G.idSeq % 2 ? 1 : -1,
+    state:'idle', t:0, anim: Math.random() * 5, windupMs: 900, stacked:false };
+  G.climbers.push(e); return e;
 }
-function spawnSpike(side, o = {}) {
-  const sp = BALANCE.enemies.stacheln;
-  let len = 1; for (const l of sp.lengthCols) if (G.depth >= l.fromM && (l.chance == null || Math.random() < l.chance)) len = l.value;
-  const hRows = o.hRows ?? pick(sp.heightRows);
-  const h = hRows === 1 ? 44 : 104;
-  const y = o.y ?? WORLD_H + 40;
-  // fairness: never combine with a spike on the other wall so that all three columns are blocked at the same height
-  for (const s of G.ents) if (s.type === 'stacheln' && s.side !== side && s.y < y + h + 2*ROW_H && s.y + s.h > y - 2*ROW_H) { len = 1; if (s.len === 2) return null; }
-  const e = { id:G.idSeq++, type:'stacheln', side, y, h, len: o.len ?? len, glint: rand(0, 3000) };
-  G.ents.push(e); return e;
-}
-function spawnCutter(o = {}) {
-  // (v0.3) Seilschneider läuft durch die Entscheidungs-Queue (zählt als aktiver Angriff, Lücken/Limits gelten); Tutorial/Debug: o.now
-  const d = BALANCE.enemies.seilschneider, m = G.depth;
-  const e = { id:G.idSeq++, type:'seilschneider', state:'pending', t:0, prog:0, side: pick([-1,1]), y:-50, x:W/2, pendingFor:0,
-    descendMs: o.descendMs ?? rampSM(d.descendMs, d.fromM, d.rampToM, m), cutMs: o.cutMs ?? rampSM(d.cutMs, d.fromM, d.rampToM, m), tick:0 };
-  G.ents.push(e);
-  if (o.now !== false && (G.tutorial || o.now)) releaseCutter(e);
+function spawnCutter(y = -40) {
+  const C = BALANCE.cutter;
+  const e = { id:G.idSeq++, type:'seilschneider', weight:C.weight, x:W/2, y, speed:C.speedPx, side: pick([-1, 1]), state:'descend', t:0, prog:0,
+    cutMs: ramp(C.cutMs, G.depth), anim:0, stacked:false };
+  G.climbers.push(e); G.cutterCooldownUntil = G.time + C.cooldownMs;
+  G.texts.push({ x:W/2 + 60, y:70, txt:'Seilschneider!', t:0, life:1300, col:'#4FF0FF', size:18 });
+  AudioMgr.play('warning', { vol:0.6 });
   return e;
 }
-function releaseCutter(e) {
-  e.state = 'descend'; e.t = 0; e.reqAt = null;
-  AudioMgr.play('warning');   // audible windup of the rope cutter only (no visual marker)
+function spawnBat(side, o = {}) {
+  const B = BALANCE.bat, m = G.depth; side = side || pick([-1, 1]);
+  const e = { id:G.idSeq++, type:'fledermaus', side, x: wallX(side), y: o.y ?? (N.y - 14), state:'idle', t:0, anim: Math.random() * 5, alpha:0,
+    enterMs: o.enterMs ?? B.enterMs, windupMs: o.windupMs ?? ramp(B.windupMs, m), crossMs: o.crossMs ?? ramp(B.crossMs, m), attack:'cross', hit:false, passed:false, startY:0 };
+  G.bats.push(e); return e;
 }
-function cutterActive() { return G.ents.some(e => e.type === 'seilschneider' && !e.dead); }
-function cutterActiveVisible() { return G.ents.some(e => e.type === 'seilschneider' && !e.dead && (e.state === 'descend' || e.state === 'cut')); }
-function cutterVulnerable() { return G.ents.some(e => e.type === 'seilschneider' && !e.dead && (e.state === 'descend' || e.state === 'cut')); }
-function canSpawn(type) {
-  const d = BALANCE.enemies[type], m = G.depth;
-  if (!d || m < (d.fromM || 0)) return false;
-  if (type === 'seilschneider') return !cutterActive() && G.time >= G.cutterCooldownUntil;
-  if (type === 'beisspflanze' || type === 'spuckpflanze') return G.ents.filter(e => e.type === type).length < d.maxConcurrent && G.time >= G.plantCooldownUntil;
-  return true;
-}
-function spawnFromWeights(side) {
-  const m = G.depth; let row = BALANCE.spawnWeights[0];
-  for (const w of BALANCE.spawnWeights) if (m >= w.fromM) row = w;
-  const weights = {}; for (const k in row) if (k !== 'fromM' && canSpawn(k)) weights[k] = row[k];
-  const type = weighted(weights) || 'krabbler';
-  if (type === 'stacheln') { if (!spawnSpike(side)) spawnWall(side, 'krabbler'); }
-  else if (type === 'seilschneider') spawnCutter();
-  else if (type === 'beisspflanze' || type === 'spuckpflanze') G.ents.push({ id:G.idSeq++, type, state:'pending', t:0, reqAt:G.time, pendingFor:0 });
-  else spawnWall(side, type);
-}
-function spawnCoinChain(c, o = {}) {
-  const cc = BALANCE.pickups.coins, id = ++G.chainId;
-  for (let i=0;i<cc.chainLength;i++) G.coins.push({ x:colX(c), y:(o.y ?? WORLD_H + 40) + i*cc.chainSpacingM*PX_PER_M, chain:id, t:rand(0,6) });
-}
-function columnSafeForCoins(c) {
-  const span = [WORLD_H, WORLD_H + 80 + BALANCE.pickups.coins.chainLength*BALANCE.pickups.coins.chainSpacingM*PX_PER_M];
-  for (const s of G.ents) if (s.type === 'stacheln' && s.y < span[1] + 40 && s.y + s.h > span[0] - 40) {
-    if (c === s.side || (s.len === 2 && c === 0)) return false;
-  }
-  return true;
-}
+function cutterAlive() { return G.climbers.some(e => e.type === 'seilschneider') || G.stack.some(e => e.type === 'seilschneider'); }
 function spawner() {
-  if (G.tutorial) return;
-  const m = G.depth, dens = stepVal(BALANCE.wallDensity, m);
-  if (G.wave.phase === 'rest' && !G.wave.coinsGiven) {   // Atempause: Münzkette vorziehen
-    G.wave.coinsGiven = true; G.nextCoinM = Math.min(G.nextCoinM, m);
+  if (G.wave.phase === 'rest') return;     // Atempause: nichts Neues
+  const m = G.depth, C = BALANCE.climber, CU = BALANCE.cutter, B = BALANCE.bat;
+  if (G.time >= G.nextClimbAt) {
+    let n = 1;
+    if (m >= C.pairFromM && Math.random() < ramp(C.pairChance, m)) n = 2;
+    if (n === 2 && m >= C.tripleFromM && Math.random() < C.tripleChance) n = 3;
+    if (m >= CU.fromM && G.time >= G.cutterCooldownUntil && !cutterAlive() && Math.random() < CU.chance) { spawnCutter(); n = 1; }
+    else { const spd = ramp(C.speedPx, m); for (let i = 0; i < n; i++) spawnClimber(-30 - i * C.groupGapPx, spd); }
+    G.nextClimbAt = G.time + ramp(C.intervalMs, m) * (1 + 0.55 * (n - 1)) * rand(0.85, 1.15);
   }
-  for (const side of [-1, 1]) {
-    if (m >= G.nextSpawnM[side]) { spawnFromWeights(side); G.nextSpawnM[side] = m + (BALANCE.world.metersPerScreen / dens) * rand(0.75, 1.25); }
-  }
-  const cc = BALANCE.pickups.coins;
-  if (m >= G.nextCoinM) {
-    const cols = [-1,0,1].filter(c => !cc.placeOnlyInSafeCells || columnSafeForCoins(c));
-    if (cols.length) spawnCoinChain(pick(cols));
-    G.nextCoinM = m + cc.avgEveryM * cc.chainLength * rand(0.7, 1.3);
-  }
-  // Comeback-Fass: Wurf alle 10 m, nach pityAfterM garantiert; kommt in der Reihe des Ninjas, scrollt nie vorbei
-  const bp = BALANCE.barrel.pickup;
-  if (m >= G.pickup.nextRollM) {
-    G.pickup.nextRollM = m + 10;
-    const since = G.pickup.burstDepth == null ? 0 : m - G.pickup.burstDepth;
-    if ((!bp.onlyWhenNoBarrel || !N.barrel) && G.pickup.burstDepth != null && since >= bp.minDepthAfterBurstM
-        && m - G.pickup.lastDepth >= bp.minSpacingM && !G.ents.some(e => e.type === 'fass') && (Math.random() < bp.chancePer10m || since >= bp.pityAfterM)) {
-      const row = bp.targetNinjaRow ? N.vv : rowPick() ?? 0;
-      let side = pick([-1,1]); if (slotTaken(side, row)) side = -side;
-      spawnWall(side, 'fass', { targetRow: row, noPass:true }); G.pickup.lastDepth = m;
-    }
+  if (m >= B.fromM && G.time >= G.nextBatAt) {
+    const active = G.bats.filter(b => b.state !== 'leave').length;
+    if (active < stepVal(B.maxConcurrent, m)) spawnBat();
+    G.nextBatAt = G.time + ramp(B.intervalMs, m) * rand(0.8, 1.2);
   }
 }
 
-/* ===================================================================== THREATS & FAIRNESS */
-const ATTACK_STATES = new Set(['windup','attack','crack','bite','aim','spit']);
-function entThreatCells(e) {
-  if (e.dead) return [];
-  if (e.cells && ATTACK_STATES.has(e.state)) return e.cells;
-  // Krabbler-Arm noch in der Mitte → Mitte bleibt bedroht (Ninja pendelt nicht durch den Arm zurück)
-  if (e.type === 'krabbler' && e.state === 'recover' && e.cells && e.t < BALANCE.enemies.krabbler.attacks.jab.recoverMs * 0.3) return e.cells.filter(k => k.startsWith('0,'));
-  if (e.type === 'stacheln') {
-    const la = G.scrollPx * BALANCE.fairness.spikeLookAheadMs / 1000, out = [], br = 30;
-    for (let r=-1;r<=1;r++) { const y = rowY(r);
-      if (e.y - la < y + br && e.y + e.h > y - br) { out.push(key(e.side, r)); if (e.len === 2) out.push(key(0, r)); } }
-    return out;
+/* ===================================================================== UPDATE: FASS, KLETTERER, STAPEL, FLEDERMÄUSE */
+function updateBarrel(dt) {
+  N.offT += dt;
+  const k = clamp(N.offT / N.offDur, 0, 1), e = N.offTo < N.offFrom ? easeOutBack(k, 1.7) : easeOutBack(k, 1.1);
+  N.off = lerp(N.offFrom, N.offTo, e);
+  const sagT = N.knot ? stackWeight() * BALANCE.knot.sagPerWeightPx : 0;
+  N.sag += (sagT - N.sag) * Math.min(1, dt / 120);
+  const st = strain(), jit = st >= 0.66 ? Math.sin(G.time * 0.09) * st * 1.6 : 0;
+  const nx = W/2 + Math.sin(G.time * 0.0011) * 9 + Math.sin(G.time * 0.0027) * 3 + jit;
+  N.vx = (nx - N.x) / Math.max(0.001, dt / 1000); N.x = nx;
+  N.y = REST_Y + N.off + N.sag;
+  N.inv = Math.max(0, N.inv - dt); N.hitFlash = Math.max(0, N.hitFlash - dt / 250); N.knotPop = Math.max(0, N.knotPop - dt / 220); N.slashT = Math.max(0, N.slashT - dt);
+}
+function updateClimbers(dt) {
+  const s = dt / 1000, K = BALANCE.knot, gap = BALANCE.climber.minGapPx;
+  let aheadY = 1e9, n = 0;
+  G.climbers.sort((a, b) => b.y - a.y);   // vorderster zuerst
+  for (const c of G.climbers) {
+    c.anim += s; c.t += dt;
+    c.y = Math.min(c.y + c.speed * s, aheadY - gap);
+    c.x = ropeXAt(c.y);
+    let keep = true;
+    if (N.knot) {
+      if (c.y >= slotY(stackWeight()) - (c.type === 'seilschneider' ? 6 : 0)) { stackIt(c); keep = false; }
+    } else if (c.y + CLIMB_REACH >= ropeEnd().y - 6) { hitBarrel(c); keep = false; }
+    if (keep) { G.climbers[n++] = c; aheadY = c.y; }
   }
-  return [];
+  G.climbers.length = n;
 }
-function computeThreats(exclude) {
-  const s = new Set();
-  for (const e of G.ents) if (e !== exclude) for (const k of entThreatCells(e)) s.add(k);
-  for (const p of G.projectiles) s.add(p.targetKey);
-  return s;
+function stackIt(c) {
+  const K = BALANCE.knot;
+  c.stacked = true; c.t = 0;
+  if (c.type === 'seilschneider') { c.state = 'cut'; c.t = 0; c.prog = 0; G.texts.push({ x:W/2, y:c.y - 40, txt:'Er sägt am Knoten!', t:0, life:1200, col:'#EC7380', size:18 }); AudioMgr.play('warning'); }
+  else { c.state = 'idle'; }
+  G.stack.push(c);
+  const w = stackWeight();
+  AudioMgr.play('enemy_hit', { vol:0.35, rate: 0.8 + w * 0.05 }); AudioMgr.ropeCreak(); Haptics.buzz(8);
+  burst(c.x, c.y + 10, 4, ['#C9A66B', '#8C6E3F'], 80);
+  if (w > K.maxStack && !G.tutorial) { gameOver('snap'); return; }
+  if (w === K.maxStack) { G.texts.push({ x:W/2, y:c.y - 34, txt:'Seil reißt gleich!', t:0, life:1100, col:'#E2283C', size:20 }); AudioMgr.play('warning', { vol:0.8 }); vfx.vignette(0.5); Haptics.buzz([20, 20, 20]); }
+  else if (w === K.maxStack - 1) AudioMgr.play('rope_creak', { vol:0.9 });
 }
-function activeAttacks() {
-  let n = 0;
-  for (const e of G.ents) if (!e.dead && (ATTACK_STATES.has(e.state) || (e.type === 'seilschneider' && BALANCE.enemies.seilschneider.countsAsActiveAttack && (e.state === 'descend' || e.state === 'cut')))) n++;
-  return n;
+function hitBarrel(c) {
+  toFaller(c, (c.side || 1) * rand(120, 200), -rand(120, 200));
+  if (G.tutorial && G.tutorial.step === 2) G.tutorial.missed = (G.tutorial.missed || 0) + 1;
+  hurt(c.type === 'seilschneider' ? BALANCE.barrel.cutterDamage : 1, c.x + (c.side || 1));
 }
-function reachableInOneSwipe(withCorners) {
-  // ein Wischer setzt eine Achse direkt auf ±1; Stehenbleiben zählt auch. Ecken brauchen ZWEI Wischer (keine Diagonalen)
-  const out = [key(N.hx, N.vv)];
-  for (const h of [-1,1]) out.push(key(h, N.vv));
-  for (const v of [-1,1]) out.push(key(N.hx, v));
-  if (withCorners) for (const h of [-1,1]) for (const v of [-1,1]) out.push(key(h, v));
-  return out;
-}
-function fairOK(e, cells, sweepRow, windupMs) {
-  const f = BALANCE.fairness;
-  const cur = computeThreats(e), union = new Set([...cur, ...cells]);
-  if (f.alwaysOneSafeCellReachableInOneSwipe && !reachableInOneSwipe(false).some(k => !union.has(k))
-      && !((windupMs || 0) >= f.minWindupCornerOnlyMs && reachableInOneSwipe(true).some(k => !union.has(k)))) return false;
-  // Seilschneider angreifbar → obere Reihe bleibt frei (nach oben wischen muss immer gehen)
-  if (f.keepTopRowFreeWhileCutterVulnerable && cutterVulnerable() && cells.some(k => k.endsWith(',-1'))) return false;
-  if (CELLS.filter(([c,r]) => !union.has(key(c,r))).length < 2) return false;
-  if (f.neverAllThreeCellsOfARowBlocked) for (let r=-1;r<=1;r++) {
-    const full = [-1,0,1].every(c => union.has(key(c,r)));
-    if (!full) continue;
-    const ownSweep = sweepRow != null && sweepRow.includes(r) && ![-1,0,1].some(c => cur.has(key(c,r)));
-    if (!ownSweep) return false;
-  }
-  return true;
-}
-function escSteps(m) { const es = BALANCE.escalation; return es && m >= es.fromM ? Math.floor((m - es.fromM) / es.everyM) + 1 : 0; }
-function maxConcurrentNow(m) { const es = BALANCE.escalation, base = stepVal(BALANCE.behaviour.maxConcurrentAttacks, m), k = escSteps(m);
-  return k ? Math.max(base, Math.min(es.concurrentCap, base + k * es.concurrentPlus)) : base; }
-function attackGapNow(m) {
-  const es = BALANCE.escalation, wv = BALANCE.waves, k = escSteps(m);
-  let gap = ramp(BALANCE.behaviour.attackGapMs, m);
-  if (k) gap = Math.max(es.attackGapMinMs, gap - k * es.attackGapMinusMs);
-  if (wv && G.wave.phase === 'active') { const p = clamp(G.wave.t / Math.max(1, G.wave.dur || 1), 0, 1); gap *= lerp(wv.gapMultStart, wv.gapMultEnd, p) * (G.wave.surge ? wv.surgeGapMult : 1); }
-  return gap;
-}
-function tryRelease(e) {
-  const b = BALANCE.behaviour, m = G.depth, f = BALANCE.fairness;
-  const tut = e.tut;
-  if (!tut) {
-    if (G.wave.phase === 'rest') return false;                         // Atempause: keine neuen Angriffe
-    if (activeAttacks() >= maxConcurrentNow(m)) return false;
-    if (G.time - G.lastAttackStart < Math.max(attackGapNow(m), f.minGapBetweenConflictingImpactsMs)) return false;
-  }
-  const baseWind = Math.max(f.minWindupMs, ramp(b.windupMs, m));
-  const def = BALANCE.enemies[e.type];
-  if (e.type === 'seilschneider') {
-    // fair: nach oben muss frei sein (kein Angriff in der oberen Reihe der aktuellen Spalte)
-    const cur = computeThreats(e);
-    if ([-1,0,1].every(c => cur.has(key(c, -1)))) return false;
-    releaseCutter(e); G.lastAttackStart = G.time; return true;
-  }
-  if (e.type === 'krabbler' || e.type === 'fledermaus') {
-    const opts = {}; for (const [k, a] of Object.entries(def.attacks)) if (m >= (a.fromM || 0) && !(tut && k !== Object.keys(def.attacks)[0])) opts[k] = a.weight;
-    const atk = weighted(opts); const a = def.attacks[atk];
-    let cells, sweep = null, rowTo = e.row;
-    if (atk === 'jab') cells = [key(e.side, e.row), key(0, e.row)];
-    else if (atk === 'leap' || atk === 'cross') { cells = [-1,0,1].map(c => key(c, e.row)); sweep = [e.row]; }
-    else if (atk === 'swoop') { rowTo = e.row === 0 ? pick([-1,1]) : 0; cells = [key(e.side, e.row), key(0, e.row), key(0, rowTo), key(-e.side, rowTo)]; sweep = [e.row, rowTo]; }
-    const wu = e.windupOverride ?? (baseWind + (a.windupBonusMs || 0));
-    if (!tut && !fairOK(e, cells, sweep, wu)) return false;
-    Object.assign(e, { state:'windup', t:0, attack:atk, cells, rowTo, windupMs: wu });
-    // Telegraph = sichtbarer Wandriss hinter dem Krabbler, Dauer = windupMs (rein visuell)
-    if (e.type === 'krabbler') { e.fx = vfx.wallBreak(e.x, e.y, { crackMs: e.windupMs, radius: 26, holdMs: 700, closeMs: 300 }); e.fxGen = e.fx.gen; }
-  } else if (e.type === 'beisspflanze' || e.type === 'spuckpflanze') {
-    const leftRecently = G.time - N.leftAt < f.noBackWallInCellNinjaJustLeftWithinMs ? N.leftCell : null;
-    const cands = CELLS.filter(([c,r]) => {
-      if (e.type === 'beisspflanze' && c === 0 && r === 0 && m < def.centerFromM) return false;
-      if (f.noBackWallInTopRowWhileCutterActive && r === -1 && cutterActive()) return false;
-      if (key(c,r) === leftRecently) return false;
-      return true;
-    });
-    for (let tries = 0; tries < 6 && cands.length; tries++) {
-      const [c, r] = cands.splice(Math.floor(Math.random()*cands.length), 1)[0];
-      let cells, tc = null, trr = null;
-      if (e.type === 'spuckpflanze') {
-        const nb = [[c-1,r],[c+1,r],[c,r-1],[c,r+1]].filter(([a,bb]) => Math.abs(a)<=1 && Math.abs(bb)<=1 && !(f.noBackWallInTopRowWhileCutterActive && bb === -1 && cutterActive()));
-        if (!nb.length) continue; [tc, trr] = pick(nb); cells = [key(tc, trr)];
-      } else cells = [key(c, r)];
-      const crack = e.type === 'beisspflanze' ? rampSM(def.crackMs, def.fromM, def.rampToM, m) : def.crackMs;
-      if (!fairOK(e, cells, null, Math.max(f.minWindupMs, crack))) continue;
-      Object.assign(e, { state:'crack', t:0, c, r, tc, tr:trr, cells, crackMs: Math.max(f.minWindupMs, crack), aimDir:0 });
-      // Wandriss (Dauer = crackMs), bricht zum Biss/Zielen auf; holdMs nur Sicherheitsnetz, Schließen beim Zurückziehen
-      e.fx = vfx.wallBreak(colX(c), rowY(r), { crackMs: e.crackMs, radius: 30,
-        holdMs: (e.type === 'beisspflanze' ? def.biteMs : def.aimMs) + def.stayMs + def.retractMs + 200, closeMs: def.retractMs }); e.fxGen = e.fx.gen;
-      G.plantCooldownUntil = G.time + def.cooldownMs;
-      G.lastAttackStart = G.time; return true;
+function updateStack(dt) {
+  if (!G.stack.length) return;
+  const s = dt / 1000; let w = 0;
+  for (const e of G.stack) {
+    const ty = slotY(w + (e.weight - 1) / 2); w += e.weight;
+    e.y += (ty - e.y) * Math.min(1, s * 16); e.x = ropeXAt(e.y); e.anim += s;
+    if (e.type === 'seilschneider') {
+      e.t += dt; e.prog = clamp(e.t / e.cutMs, 0, 1);
+      vfx.ropeFray(e.x, e.y + 18, e.prog, dt);
+      if (e.t >= e.cutMs && !G.tutorial) { gameOver('cut'); return; }
     }
-    return false;
-  } else return false;
-  G.lastAttackStart = G.time;
-  return true;
-}
-function decisionQueue(dtMs) {
-  if (G.wave.phase === 'rest' && !G.tutorial) return;   // Atempause: Gegner warten ruhig
-  const reqs = G.ents.filter(e => !e.dead && ((e.state === 'idle' && e.idleT <= 0 && e.type !== 'fass') || e.state === 'pending'));
-  for (const e of reqs) if (e.reqAt == null) e.reqAt = G.time;
-  reqs.sort((a,b) => a.reqAt - b.reqAt);
-  for (const e of reqs) {
-    if (tryRelease(e)) { e.reqAt = null; continue; }
-    if (e.state === 'idle') {
-      e.idleT = BALANCE.behaviour.blockedIdleExtendMs; e.retries++;
-      if (e.retries > BALANCE.behaviour.maxBlockedRetries) { e.state = 'leave'; e.reqAt = null; }
-    } else if (G.wave.phase !== 'rest') { e.pendingFor += dtMs; if (e.pendingFor > (e.type === 'seilschneider' ? 12000 : 6000)) e.dead = true; }
   }
+  const st = strain();
+  if (st >= BALANCE.knot.strainFrom / BALANCE.knot.maxStack) { vfx.ropeFray(ropeXAt(knotY() - 20), knotY() - 6, st * 0.6, dt); if (Math.random() < dt / 900) AudioMgr.ropeCreak(); }
 }
-
-/* ===================================================================== ENTITY UPDATE */
-function slotTaken(side, row, self) { return G.ents.some(o => o !== self && o.onWall && o.side === side && o.row === row && o.state !== 'scroll' && o.state !== 'leave' && !o.dead); }
-function ninjaRow() { return ninjaCell()[1]; }
-function hitByPoint(x, y, r, ownRow) {
-  if (ownRow != null) return ninjaRow() === ownRow && Math.abs(N.x - x) < bodyR() + r;
-  return Math.hypot(N.x - x, N.y - y) < bodyR() + r;
-}
-function updateEnts(dtMs) {
-  const dt = dtMs/1000, sc = G.scrollPx * dt;
-  for (const e of G.ents) {
-    if (e.dead) continue;
-    e.t += dtMs; e.anim = (e.anim||0) + dt;
-    switch (e.type) {
-      case 'stacheln': {
-        e.y -= sc; if (e.y + e.h < -60) e.dead = true;
-        const tip = spikeTip(e), x0 = e.side < 0 ? 0 : tip, x1 = e.side < 0 ? tip : W;
-        if (circleRect(N.x, N.y, bodyR()*0.85, x0, e.y, x1 - x0, e.h)) hurt('spike');
-        break;
-      }
-      case 'krabbler': case 'fledermaus': case 'fass': updateWallEnt(e, dtMs, sc); break;
-      case 'seilschneider': {
-        if (e.state === 'pending') break;
-        if (e.state === 'descend') {
-          // schneller Einstieg bis knapp unter die Tiefenanzeige, dann langsames Abseilen – Körper sofort sichtbar
-          const p = Math.min(1, e.t / e.descendMs), DROP = 0.1, Y1 = CUT_Y - 30;
-          e.y = p < DROP ? lerp(-50, Y1, easeOutCubic(p / DROP)) : lerp(Y1, CUT_Y, smooth((p - DROP) / (1 - DROP)));
-          if (p >= 1) { e.state = 'cut'; e.t = 0; }
-        } else if (e.state === 'cut') {
-          e.prog = Math.min(1, e.prog + dtMs / e.cutMs); e.tick += dtMs;
-          vfx.ropeFray(ropeXAt(CUT_Y + 8), CUT_Y + 8, e.prog, dtMs);   // Telegraph: Fasern lösen sich am Seil
-          if (e.tick > 180) { e.tick = 0; if (!AudioMgr.has('rope_cutting_loop')) AudioMgr.play('cutTick'); }
-          if (e.prog >= 1) {
-            if (G.tutorial && G.tutorial.t < BALANCE.tutorial.noDamageUntilMs) { e.prog = 0.2; G.texts.push({ x:W/2, y:CUT_Y+40, txt:'Nach oben wischen!', t:0, life:1100, col:'#E2283C' }); }
-            else { e.dead = true; G.cutterCooldownUntil = G.time + BALANCE.enemies.seilschneider.cooldownMs; gameOver('rope'); }
-          }
+function updateBats(dt) {
+  const B = BALANCE.bat; let n = 0;
+  for (const e of G.bats) {
+    e.t += dt; e.anim += dt / 1000;
+    if (e.state === 'idle') { e.alpha = clamp(e.t / e.enterMs, 0, 1); e.x = wallX(e.side) + e.side * 26 * (1 - e.alpha); if (e.t >= e.enterMs) { e.state = 'windup'; e.t = 0; e.startToggle = N.lastToggleAt; } }
+    else if (e.state === 'windup') { if (e.t >= e.windupMs) { e.state = 'attack'; e.t = 0; AudioMgr.play('swipe', { vol:0.8, rate:0.8 }); } }
+    else if (e.state === 'attack') {
+      const k = clamp(e.t / e.crossMs, 0, 1), x0 = wallX(e.side), x1 = wallX(-e.side) - e.side * 40;
+      const px = e.x; e.x = lerp(x0, x1, k); const yy = e.y + Math.sin(k * Math.PI) * 6;
+      if (!e.hit && Math.abs(e.x - N.x) < 30 && Math.abs(yy - (N.y - 14)) < B.bandPx) { e.hit = true; hurt(1, e.x); if (G.state !== 'play') return; }
+      if (!e.passed && Math.sign(px - N.x) !== Math.sign(e.x - N.x)) {
+        e.passed = true;
+        // Ausgewichen: die alte Fasshöhe lag in der Flugbahn, der Spieler hat sich rechtzeitig bewegt
+        if (!e.hit && N.lastToggleAt > e.startToggle && Math.abs(yy - (N.prevY - 14)) < B.bandPx && !G.tutorial) {
+          addBonus(B.dodgeBonus, N.x, N.y - 100, 'AUSGEWICHEN!', '#4FF0FF', 18); G.run.dodge++; Missions.add('dodge'); comboStep(1);
+          AudioMgr.play('score_pickup', { vol:0.5, rate:1.3 });
         }
-        e.x = ropeXAt(e.y) + e.side * 13;
-        break;
       }
-      case 'beisspflanze': case 'spuckpflanze': updatePlant(e, dtMs); break;
-    }
+      if (k >= 1) { e.state = 'leave'; e.t = 0; }
+    } else if (e.state === 'leave') { e.x += -e.side * 300 * dt / 1000; e.alpha = Math.max(0, 1 - e.t / 300); if (e.t > 300) continue; }
+    G.bats[n++] = e;
   }
-  for (const p of G.projectiles) {
-    p.t += dtMs; const k = Math.min(1, p.t / p.life);
-    p.x = lerp(p.x0, p.x1, k); p.y = lerp(p.y0, p.y1, k) - Math.sin(k*Math.PI)*24;
-    if (Math.hypot(N.x - p.x, N.y - p.y) < bodyR() + 10) { p.done = true; hurt('spit'); burst(p.x, p.y, 8, ['#4E7A3A','#2F5B4A'], 140); }
-    if (k >= 1 && !p.done) { p.done = true; burst(p.x, p.y, 8, ['#4E7A3A','#2F5B4A'], 120); }
+  G.bats.length = n;
+}
+function updateFallers(dt) {
+  const s = dt / 1000; let n = 0;
+  for (const f of G.fallers) {
+    f.t += dt; f.vy += 1300 * s; f.x += f.vx * s; f.y += f.vy * s; f.rot += f.vr * s;
+    if (f.y < WORLD_H + 60) G.fallers[n++] = f;
   }
-  // in-place kompaktieren statt filter() (keine Array-Allocs pro Frame; Semantik identisch)
-  let np = 0; for (const p of G.projectiles) if (!p.done) G.projectiles[np++] = p; G.projectiles.length = np;
-  let ne = 0; for (const e of G.ents) if (!e.dead) G.ents[ne++] = e; G.ents.length = ne;
-}
-function spikeTip(e) { const reachCol = e.len === 2 ? 0 : e.side; return colX(reachCol) - e.side * 22; }
-function updateWallEnt(e, dtMs, sc) {
-  const def = BALANCE.enemies[e.type];
-  switch (e.state) {
-    case 'scroll': {
-      const prev = e.y; e.y -= sc;
-      for (const r of [1,0,-1]) { const ry = rowY(r);
-        if (prev > ry && e.y <= ry && r === e.targetRow && (!slotTaken(e.side, r, e) || e.noPass)) {
-          e.y = ry; e.row = r; e.state = 'idle'; e.t = 0;
-          e.idleT = e.idleOverride ?? (e.type === 'fass' ? BALANCE.barrel.pickup.stayMs : rand(...def.idleMs));
-        } }
-      if (e.y < -80) e.dead = true;
-      break;
-    }
-    case 'idle':
-      e.idleT -= dtMs;
-      if (e.type === 'fass') { if (e.idleT <= 0) { e.state = 'leave'; } if (Math.hypot(N.x - e.x, N.y - e.y) < bodyR() + 22) collectBarrel(e); }
-      break;
-    case 'windup':
-      if (e.tut && e.type === 'krabbler') G.slowMoReq = Math.min(G.slowMoReq, BALANCE.tutorial.steps.find(s => s.spawn === 'tutKrabbler').slowMo);
-      if (e.t >= e.windupMs) { nearMiss(e); e.state = 'attack'; e.t = 0; e.onWall = false; e.colRow = e.row; fxBreak(e);
-        if (e.attack === 'cross' || e.attack === 'swoop') { e.x = wallX(e.side); }
-      }
-      break;
-    case 'attack': {
-      if (e.attack === 'jab') {
-        const a = def.attacks.jab, p = Math.min(1, e.t / a.durationMs);
-        e.x = lerp(wallX(e.side), colX(0), easeOutCubic(p));
-        if (ninjaRow() === e.row && (e.side < 0 ? N.x - bodyR() < e.x + 14 : N.x + bodyR() > e.x - 14)) hurt('jab');
-        if (p >= 1) { e.state = 'recover'; e.t = 0; }
-      } else if (e.attack === 'leap') {
-        const p = Math.min(1, e.t / rampSM(def.attacks.leap.crossMs, def.attacks.leap.fromM, 400, G.depth));
-        e.x = lerp(wallX(e.side), wallX(-e.side), smooth(p)); e.yOff = -Math.sin(p*Math.PI) * 26;
-        if (hitByPoint(e.x, e.y, 16, e.row)) hurt('leap');
-        if (p >= 1) { e.side = -e.side; e.x = wallX(e.side); e.yOff = 0; e.onWall = true; e.state = 'leave'; }
-      } else { // bat cross / swoop
-        const a = def.attacks[e.attack];
-        const dur = e.attack === 'cross' ? ramp(a.crossMs, G.depth) : a.crossMs;
-        const p = e.t / dur, x0 = e.side < 0 ? -30 : W + 30, x1 = e.side < 0 ? W + 40 : -40;
-        e.x = lerp(wallX(e.side), x1, p);
-        if (e.attack === 'cross') { e.y = rowY(e.row) + Math.sin(e.t / 600 * Math.PI * 2) * a.sineAmplitudeRows * ROW_H; e.colRow = e.row;
-          if (hitByPoint(e.x, e.y, 16, e.row)) hurt('bat'); }
-        else { const k = smooth((p - 0.3) / 0.4); e.y = lerp(rowY(e.row), rowY(e.rowTo), k); e.colRow = clamp(Math.round((e.y - REST_Y)/ROW_H), -1, 1);
-          if (hitByPoint(e.x, e.y, 16, null)) hurt('bat'); }
-        if (p >= 1 || e.x < -60 || e.x > W + 60) e.dead = true;
-        void x0;
-      }
-      break;
-    }
-    case 'recover': {
-      const a = def.attacks.jab, p = e.t / a.recoverMs;
-      e.x = lerp(colX(0), wallX(e.side), easeOutCubic(Math.min(1, p / 0.6)));   // Arm zieht sofort zurück
-      if (p >= 1) { e.x = wallX(e.side); e.onWall = true;
-        if (e.tut && !e.dead) { e.state = 'idle'; e.idleT = 1500; e.retries = 0; } else e.state = 'leave'; }
-      break;
-    }
-    case 'leave':
-      e.row = null; e.y -= sc; if (e.y < -80) e.dead = true; break;
-  }
-}
-function updatePlant(e, dtMs) {
-  const def = BALANCE.enemies[e.type];
-  switch (e.state) {
-    case 'pending': break;
-    case 'crack':
-      if (e.t >= e.crackMs) { e.t = 0; e.state = e.type === 'beisspflanze' ? 'bite' : 'aim'; fxBreak(e); if (e.type === 'beisspflanze') nearMiss(e); }
-      break;
-    case 'bite':
-      { const [nc, nr] = ninjaCell(); if (nc === e.c && nr === e.r) hurt('bite'); }
-      if (e.t >= def.biteMs) { e.t = 0; e.state = 'stay'; e.cells = null; }
-      break;
-    case 'aim':
-      e.aimDir = Math.atan2(rowY(e.tr) - rowY(e.r), colX(e.tc) - colX(e.c));
-      if (e.t >= def.aimMs) { e.t = 0; e.state = 'stay';
-        G.projectiles.push({ x0:colX(e.c), y0:rowY(e.r), x1:colX(e.tc), y1:rowY(e.tr), x:colX(e.c), y:rowY(e.r), t:0, life:def.projectileMs, targetKey:key(e.tc, e.tr) });
-        AudioMgr.play('swipe'); e.cells = null; }
-      break;
-    case 'stay':
-      if (e.t >= def.stayMs) { e.t = 0; e.state = 'retract'; fxClose(e, def.retractMs); }
-      break;
-    case 'retract':
-      if (e.t >= def.retractMs) e.dead = true;
-      break;
-  }
-}
-
-/* ===================================================================== ROPE GEOMETRY */
-function ropeEnd() {
-  const ang = ninjaRot(), d = N.barrel ? 74 : 40;
-  return { x: N.x + Math.sin(ang) * d, y: N.y - Math.cos(ang) * d, ang };
-}
-function ninjaRot() {
-  const dx = N.x - W/2, dy = N.y - ANCHOR_Y;
-  return Math.atan2(-dx, dy) * 0.9 - clamp(N.vx, -900, 900) * 0.00025;
-}
-function ropeXAt(y) {
-  const e = ropeEnd(); const k = (y - ANCHOR_Y) / Math.max(1, e.y - ANCHOR_Y);
-  return lerp(W/2, e.x, clamp(k, 0, 1));
+  G.fallers.length = n;
 }
 
 /* ===================================================================== RENDER: BACKGROUND
@@ -1431,21 +1035,100 @@ function drawDust() {   // feste Palettenfarbe + globalAlpha statt Farb-String p
 }
 function roundRect(c, x, y, w, h, r) { r = Math.min(r, w/2, h/2); c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
 
-/* ===================================================================== RENDER: ROPE */
+/* ===================================================================== RENDER: SEIL, KNOTEN, STAPEL */
 function drawRope() {
-  if (N.dead && G.deathReason === 'rope') { // snapped: upper piece swings away
-    const k = Math.min(1, (performance.now() - G.overAt) / 500);
-    ropeLine(W/2, ANCHOR_Y, W/2 + 20*k, CUT_Y - 10 - k*40); return;
-  }
   const e = ropeEnd();
-  ropeLine(W/2, ANCHOR_Y, e.x, e.y);
-  // Kein Fortschrittsring/Warnmarker mehr: Seilschneider-Telegraph = Sägebewegung + vfx.ropeFray (Fasern) + Sound
+  if (N.dead && (G.deathReason === 'snap' || G.deathReason === 'cut' || G.deathReason === 'rope')) {
+    const k = Math.min(1, (performance.now() - G.overAt) / 500);
+    if (G.deathReason !== 'rope') ropeLine(W/2, ANCHOR_Y, W/2 + 20*k, G.snapY - k*50, 0);   // oberes Stück schnellt hoch
+    ropeLine(e.x, e.y, e.x - 10*k, e.y - G.snapLen * (1 - 0.3*k), 0);                       // unteres Stück fällt mit dem Fass
+    return;
+  }
+  const st = strain();
+  ropeLine(W/2, ANCHOR_Y, e.x, e.y, st);
 }
-function ropeLine(x0, y0, x1, y1) {
+function ropeLine(x0, y0, x1, y1, st) {
   ctx.save(); ctx.lineCap = 'round';
-  ctx.strokeStyle = PAL.ropeShade; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-  ctx.strokeStyle = PAL.rope; ctx.lineWidth = 3; ctx.setLineDash([5, 4]); ctx.lineDashOffset = -G.bgOff * 0.6;
-  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  const thin = st > 0.5 ? (st - 0.5) * 1.6 : 0;   // gespanntes Seil wird dünner
+  ctx.strokeStyle = PAL.ropeShade; ctx.lineWidth = 5 - thin; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.strokeStyle = PAL.rope; ctx.lineWidth = 3 - thin * 0.6; ctx.setLineDash([5, 4]); ctx.lineDashOffset = -G.bgOff * 0.6;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+  if (st >= 0.66) {   // Spannung: rötliches Glühen pulsiert
+    ctx.globalAlpha = (0.25 + 0.35 * Math.abs(Math.sin(G.time * 0.012))) * clamp((st - 0.5) * 2, 0, 1);
+    ctx.strokeStyle = '#E2283C'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0, Math.max(y0, slotY(stackWeight()) - 40)); ctx.lineTo(x1, y1); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawKnot(x, y, st) {
+  const pop = N.knotPop, sc = 1 + pop * 0.6 - pop * pop * 0.3;
+  ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc);
+  vfx.glow(ctx, 0, 0, 22, 'moon', 0.18 + pop * 0.4);
+  ctx.lineCap = 'round';
+  // hängende Enden
+  ctx.strokeStyle = PAL.ropeShade; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(4, 3); ctx.quadraticCurveTo(14, 8, 12 + Math.sin(G.time * 0.004) * 2, 20); ctx.moveTo(-3, 4); ctx.quadraticCurveTo(-11, 10, -8, 18); ctx.stroke();
+  // Achterknoten: zwei verschlungene Schlaufen
+  ctx.fillStyle = PAL.ropeShade; ctx.beginPath(); ctx.ellipse(0, 0, 10, 8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = PAL.rope; ctx.lineWidth = 3.2;
+  ctx.beginPath(); ctx.ellipse(-2, -1, 8, 4.5, 0.7, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(2, 1, 8, 4.5, -0.7, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(159,216,255,.55)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(0, 0, 8.5, -2.6, -1.6); ctx.stroke();
+  ctx.restore();
+}
+const _FST = { anim:'windup', t:0, dur:900, side:1, attack:'', phase:'', aim:0, prog:0, tA:0 };
+function drawClimber(e) {
+  if (e.type === 'seilschneider') { ea.drawEnt(ctx, e); return; }
+  const sd = e.side || 1, off = e.stacked ? sd * 8 : sd * 3;   // gestapelt: abwechselnd links/rechts ans Seil geklammert
+  ctx.save(); ctx.translate(e.x + off, e.y); ctx.rotate(Math.PI + (e.stacked ? sd * 0.32 : 0)); ctx.scale(1.2, 1.2);   // kopfüber am Seil
+  ea.drawEnt(ctx, e, 0, 0);
+  ctx.restore();
+}
+function drawStackAndClimbers() {
+  for (const e of G.climbers) drawClimber(e);
+  for (const e of G.stack) drawClimber(e);
+  if (N.knot && !N.dead) drawKnot(ropeXAt(knotY()), knotY(), strain());
+  const w = stackWeight();
+  if (w && N.knot && !N.dead) {   // Gewichtsanzeige direkt am Stapel: „4/6“
+    const max = BALANCE.knot.maxStack, y = slotY(w - 1), x = ropeXAt(y) + 34, danger = w >= max, warn = w >= max - 1;
+    ctx.save(); ctx.font = `${danger ? 20 : 17}px 'Russo One', 'Bungee', Impact, sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,15,.9)'; const t = w + '/' + max;
+    const pulse = danger ? 0.6 + 0.4 * Math.abs(Math.sin(G.time * 0.012)) : 1;
+    ctx.globalAlpha = pulse; ctx.strokeText(t, x, y); ctx.fillStyle = danger ? '#E2283C' : warn ? '#FFB347' : '#F4F1EA'; ctx.fillText(t, x, y);
+    ctx.restore();
+  }
+}
+function drawFallers() {
+  for (const f of G.fallers) {
+    const a = clamp(1 - (f.y - (WORLD_H - 140)) / 160, 0, 1); if (a <= 0) continue;
+    _FST.side = f.side; _FST.t = 700; _FST.dur = 900; _FST.tA = f.t + f.id * 377; _FST.anim = 'windup';
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(f.x, f.y); ctx.rotate(f.rot); ea.draw(ctx, f.type, 0, 0, _FST); ctx.restore();
+  }
+}
+function drawBats() { for (const e of G.bats) { const s = e.state; if (s === 'leave') e.state = 'attack'; ctx.save(); ctx.globalAlpha = e.alpha ?? 1; ea.drawEnt(ctx, e); ctx.restore(); e.state = s; } }
+
+/* Seilvorrat als Spule (HUD im Canvas, unten links): Windungen = verbleibendes Seil */
+function drawCoil() {
+  if (G.state === 'menu' || G.state === 'over' || G.tutorial) return;
+  const x = WALL_W + 46, y = WORLD_H - 118, R = BALANCE.rope, f = clamp(G.rope / R.maxM, 0, 1), low = G.rope <= R.lowM;
+  ctx.save();
+  ctx.fillStyle = 'rgba(11,20,38,.78)'; ctx.beginPath(); ctx.arc(x, y, 38, 0, Math.PI * 2); ctx.fill();
+  const pulse = low ? 0.5 + 0.5 * Math.abs(Math.sin(G.time * 0.01)) : 1;
+  ctx.strokeStyle = low ? '#E2283C' : 'rgba(159,216,255,.35)'; ctx.globalAlpha = low ? pulse : 1; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1;
+  // Holzkern
+  ctx.fillStyle = PAL.woodDark; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+  // Spirale
+  const turns = 0.4 + f * 4.6, r0 = 7, pitch = 6, steps = Math.max(8, Math.round(turns * 22)), rot = -G.bgOff * 0.004;
+  ctx.lineCap = 'round';
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.strokeStyle = pass ? PAL.rope : PAL.ropeShade; ctx.lineWidth = pass ? 2.6 : 4.6; ctx.beginPath();
+    for (let i = 0; i <= steps; i++) { const th = (i / steps) * turns * Math.PI * 2, r = r0 + pitch * th / (Math.PI * 2); const px = x + Math.cos(th + rot) * r, py = y + Math.sin(th + rot) * r;
+      if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+    ctx.stroke();
+  }
+  ctx.font = `17px 'Russo One', 'Bungee', Impact, sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,15,.9)'; const t = Math.ceil(G.rope) + ' m';
+  ctx.strokeText(t, x + 46, y - 6); ctx.fillStyle = low ? '#EC7380' : '#F4F1EA'; ctx.fillText(t, x + 46, y - 6);
+  ctx.font = `600 10px Rubik, sans-serif`; ctx.fillStyle = 'rgba(244,241,234,.65)'; ctx.fillText(low ? 'SEIL KNAPP!' : 'SEIL', x + 46, y + 12);
   ctx.restore();
 }
 
@@ -1494,9 +1177,24 @@ function mkBarrelGrad(c) {
   g.addColorStop(0, PAL.woodDark); g.addColorStop(0.45, PAL.wood); g.addColorStop(0.6, PAL.wood); g.addColorStop(1, PAL.woodDark); return g;
 }
 const STAVES = [-0.62, -0.25, 0.12, 0.48], HOOPS = [-12, 24];
+/* Fass aus 6 Dauben: herausgebrochene Dauben = Lebensanzeige (kein HUD-Herz nötig) */
+const STAVE_N = 6, STAVE_S = 8, STAVE_PTS = (() => {
+  // Kontur wie v0.3: quadratische Bézier (-26,-22) → (-36,8) → (-25,36); Daube i liegt zwischen u_i und u_i+1 (−1…1 der Halbbreite)
+  const pts = [];
+  for (let k = 0; k <= STAVE_S; k++) { const s = k / STAVE_S, a = (1-s)*(1-s), b = 2*(1-s)*s, c = s*s;
+    pts.push({ hw: -(a*-26 + b*-36 + c*-25), y: a*-22 + b*8 + c*36 }); }
+  return pts;
+})();
+function stavePath(c, i, s0, s1) {
+  const u0 = -1 + i * 2 / STAVE_N, u1 = -1 + (i + 1) * 2 / STAVE_N, k0 = Math.round(s0 * STAVE_S), k1 = Math.round(s1 * STAVE_S);
+  c.beginPath();
+  for (let k = k0; k <= k1; k++) { const p = STAVE_PTS[k]; if (k === k0) c.moveTo(u0 * p.hw, p.y); else c.lineTo(u0 * p.hw, p.y); }
+  for (let k = k1; k >= k0; k--) { const p = STAVE_PTS[k]; c.lineTo(u1 * p.hw, p.y); }
+  c.closePath();
+}
 function drawBarrelNinja(c, x, y, rot, opts = {}) {
   const o = Loadout.outfit, wpn = Loadout.weapon, t = opts.t ?? G.time/1000;
-  const slashDir = opts.slashDir || 0, slashK = opts.slashK || 0;
+  const slashDir = opts.slashDir || 0, slashK = opts.slashK || 0, daubes = opts.daubes ?? STAVE_N;
   c.save(); c.translate(x, y); c.rotate(rot);
   // rope fork to the rim
   c.strokeStyle = PAL.ropeShade; c.lineWidth = 2.5; c.beginPath(); c.moveTo(0, -74); c.lineTo(-25, -22); c.moveTo(0, -74); c.lineTo(25, -22); c.stroke();
@@ -1505,36 +1203,45 @@ function drawBarrelNinja(c, x, y, rot, opts = {}) {
   // back rim interior
   c.fillStyle = PAL.woodDark; c.beginPath(); c.ellipse(0, -22, 26, 7, 0, 0, Math.PI*2); c.fill();
   c.fillStyle = 'rgba(5,7,15,.65)'; c.fill();
-  // ninja torso + head inside
   const wind = opts.wind ?? -clamp(N.vx/400, -1, 1);
   if (c === ctx && opts.t == null) scarf.drawLocal(c, 4, -32, x, y, rot, { time: G.time, color: o.scarf, width: 7, length: 26, boost: 1 + Math.abs(wind) * 0.5, fall: G.scrollPx });
-  else drawScarf(c, 4, -32, (wind > 0 ? 1 : -1) * (1.2 + Math.abs(wind)), t, 26, o);   // Icons bleiben statisch
+  else drawScarf(c, 4, -32, (wind > 0 ? 1 : -1) * (1.2 + Math.abs(wind)), t, 26, o);
   c.fillStyle = o.suit; roundRect(c, -13, -36, 26, 18, 7); c.fill();
   c.fillStyle = o.scarf; roundRect(c, -12, -37, 24, 6, 3); c.fill();
-  // arms + blades (both out to the sides like in the concept)
+  // Arme: beim Knoten/Lösen greift ein Arm nach oben ans Seil
   for (const s of SIDES) {
     const ext = (slashDir === s) ? slashK : 0;
-    const hx = s*(24 + ext*8), hy = -26 + 6*(1-ext) - ext*4;
-    c.strokeStyle = o.suit; c.lineWidth = 6; c.lineCap = 'round'; c.beginPath(); c.moveTo(s*10, -32); c.quadraticCurveTo(s*18, -30, hx, hy); c.stroke();
+    const hx = s*(24 - ext*16), hy = -26 + 6*(1-ext) - ext*34;
+    c.strokeStyle = o.suit; c.lineWidth = 6; c.lineCap = 'round'; c.beginPath(); c.moveTo(s*10, -32); c.quadraticCurveTo(s*18, -30 - ext*10, hx, hy); c.stroke();
     c.fillStyle = o.shade; c.beginPath(); c.arc(hx, hy, 3.5, 0, Math.PI*2); c.fill();
     c.save(); c.translate(hx, hy);
-    const restAng = s > 0 ? 0.95 : Math.PI - 0.95, outAng = s > 0 ? -0.15 : Math.PI + 0.15;
-    drawBlade(c, s, lerp(restAng, outAng, ext), wpn, ext > 0.2);
+    const restAng = s > 0 ? 0.95 : Math.PI - 0.95, upAng = s > 0 ? -1.2 : Math.PI + 1.2;
+    drawBlade(c, s, lerp(restAng, upAng, ext), wpn, false);
     c.restore();
   }
   drawHead(c, 0, -50, 17, o, t, (t % 3.7) < 0.12);
-  // barrel body (in front)
+  // Inneres (sichtbar durch fehlende Dauben)
+  c.fillStyle = PAL.abyss; c.beginPath(); c.moveTo(-26, -22); c.quadraticCurveTo(-36, 8, -25, 36); c.lineTo(25, 36); c.quadraticCurveTo(36, 8, 26, -22); c.closePath();
+  if (daubes < STAVE_N) { c.globalAlpha = 0.92; c.fill(); c.globalAlpha = 1;
+    c.fillStyle = o.shade; roundRect(c, -9, -18, 18, 34, 6); c.fill(); }   // Beine des Ninjas im Fass
   const bg = (c === ctx && GC.barrel) || mkBarrelGrad(c); if (c === ctx) GC.barrel = bg;
-  c.fillStyle = bg; c.beginPath(); c.moveTo(-26, -22); c.quadraticCurveTo(-36, 8, -25, 36); c.lineTo(25, 36); c.quadraticCurveTo(36, 8, 26, -22); c.closePath(); c.fill();
-  c.strokeStyle = 'rgba(5,7,15,.45)'; c.lineWidth = 1.2;
-  for (const sx of STAVES) { c.beginPath(); c.moveTo(sx*26, -21); c.quadraticCurveTo(sx*36, 8, sx*25, 35); c.stroke(); }
+  const lost = STAVE_N - daubes;
+  for (let i = 0; i < STAVE_N; i++) {
+    let gone = false; for (let j = 0; j < lost; j++) if (STAVE_ORDER[j] === i) gone = true;
+    c.fillStyle = bg;
+    if (!gone) { stavePath(c, i, 0, 1); c.fill(); c.strokeStyle = 'rgba(5,7,15,.45)'; c.lineWidth = 1.2; c.stroke(); }
+    else {   // abgebrochene Stummel oben und unten
+      stavePath(c, i, 0, 0.125); c.fill(); stavePath(c, i, 0.875, 1); c.fill();
+      c.strokeStyle = PAL.woodDark; c.lineWidth = 1; stavePath(c, i, 0.125, 0.875); c.stroke();
+    }
+  }
   for (const hy of HOOPS) {
-    const wv = hy < 0 ? 31 : 31;
-    c.strokeStyle = PAL.iron; c.lineWidth = 5; c.beginPath(); c.moveTo(-wv + 1, hy); c.quadraticCurveTo(0, hy + 5, wv - 1, hy); c.stroke();
-    c.strokeStyle = PAL.ironGlint; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-wv + 4, hy - 1.5); c.quadraticCurveTo(0, hy + 3.5, wv - 4, hy - 1.5); c.stroke();
+    c.strokeStyle = PAL.iron; c.lineWidth = 5; c.beginPath(); c.moveTo(-30, hy); c.quadraticCurveTo(0, hy + 5, 30, hy); c.stroke();
+    c.strokeStyle = PAL.ironGlint; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-27, hy - 1.5); c.quadraticCurveTo(0, hy + 3.5, 27, hy - 1.5); c.stroke();
   }
   c.strokeStyle = PAL.woodDark; c.lineWidth = 3.5; c.beginPath(); c.ellipse(0, -22, 26, 7, 0, 0.05, Math.PI - 0.05); c.stroke();
   c.strokeStyle = 'rgba(255,226,168,.25)'; c.lineWidth = 2; c.beginPath(); c.moveTo(-14, -16); c.quadraticCurveTo(-20, 8, -14, 32); c.stroke();
+  if (opts.flash > 0) { c.globalAlpha = opts.flash * 0.6; c.fillStyle = '#F4F1EA'; c.beginPath(); c.moveTo(-26, -22); c.quadraticCurveTo(-36, 8, -25, 36); c.lineTo(25, 36); c.quadraticCurveTo(36, 8, 26, -22); c.closePath(); c.fill(); c.globalAlpha = 1; }
   c.restore();
 }
 function drawPureNinja(c, x, y, rot, opts = {}) {
@@ -1563,82 +1270,14 @@ function drawPureNinja(c, x, y, rot, opts = {}) {
   c.restore();
 }
 function drawNinja() {
-  const slashK = N.slashT > 0 ? 1 : clamp(N.slashCD / 120, 0, 1) * 0.6;
+  const slashK = N.slashT > 0 ? Math.sin((1 - N.slashT / 170) * Math.PI) : 0;
   let x = N.x, y = N.y, rot = ninjaRot();
   if (N.dead) rot += N.fall.spin * ((performance.now() - G.overAt) / 1000);
   const blink = N.inv > 0 && !N.dead && Math.floor(G.time / 70) % 2 === 0;
-  speed.draw(ctx);   // VFX Phase 2: zeichnet nur, wenn ohne Fass Linien aktiv sind
-  if (blink) ctx.globalAlpha = 0.45;
-  if (N.barrel) drawBarrelNinja(ctx, x, y, rot, { slashDir:N.slashDir, slashK });
-  else {
-    // pure ninja form: wall-run at the sides, flip / jump in the centre
-    const side = Math.sign(N.x - W/2), sideK = clamp(Math.abs(N.x - W/2) / COL_OFF, 0, 1);
-    let r = rot, run = 0;
-    if (sideK > 0.6 && !N.dead) { r = lerp(rot, -side * Math.PI/2, smooth((sideK - 0.6)/0.4)); run = 1; x += side * 10 * sideK; y -= 10 * sideK; }
-    if (N.flipT > 0) r += (1 - N.flipT) * Math.PI * 2 * -1;
-    if (N.vv > 0 && !N.dead) r += Math.sin(G.time*0.02) * 0.1;
-    drawPureNinja(ctx, x, y, r, { slashDir:N.slashDir, slashK, run });
-  }
+  if (blink) ctx.globalAlpha = 0.55;
+  if (N.dead && G.deathReason === 'barrel') drawPureNinja(ctx, x, y, rot, {});
+  else drawBarrelNinja(ctx, x, y, rot, { slashDir:N.slashDir, slashK, daubes:N.daubes, flash:N.hitFlash });
   ctx.globalAlpha = 1;
-}
-
-/* ===================================================================== RENDER: ENEMIES */
-function drawKrabbler(e) { ea.drawEnt(ctx, e); }   // VFX Phase 2: vfx/enemy-anim.js (Ausholen = einziger Telegraph)
-function drawBat(e) { ea.drawEnt(ctx, e); }
-function drawCutter(e) { if (e.state !== 'pending') ea.drawEnt(ctx, e); }
-function drawSpikes(e) {
-  const tip = spikeTip(e), wx = e.side < 0 ? WALL_W : W - WALL_W, dir = -e.side;
-  // metal plate on the wall
-  ctx.fillStyle = PAL.iron; roundRect(ctx, wx - e.side*12 - 6, e.y - 4, 12, e.h + 8, 3); ctx.fill();
-  const n = e.h > 60 ? 4 : 2, step = e.h / n;
-  for (let i=0;i<n;i++) {
-    const cy = e.y + step*(i + 0.5), bw = step*0.42;
-    const gk = Math.round(bw * 10); let sg = GC.spike[gk];   // vertikaler Verlauf relativ zu cy → je Breite einmal bauen
-    if (!sg) { sg = GC.spike[gk] = ctx.createLinearGradient(0, -bw, 0, bw); sg.addColorStop(0, '#9AA3AD'); sg.addColorStop(0.5, '#6E7682'); sg.addColorStop(1, '#4A4F57'); }
-    ctx.translate(0, cy); ctx.fillStyle = sg; ctx.beginPath(); ctx.moveTo(wx, -bw); ctx.lineTo(tip, 0); ctx.lineTo(wx, bw); ctx.closePath(); ctx.fill(); ctx.translate(0, -cy);
-    ctx.fillStyle = '#DDE3EA'; ctx.beginPath(); ctx.moveTo(tip - dir*12, cy - bw*0.22); ctx.lineTo(tip, cy); ctx.lineTo(tip - dir*12, cy + bw*0.22); ctx.closePath(); ctx.fill();
-  }
-  // metal glint sweeping along
-  const gp = ((G.time + e.glint) % 2200) / 2200;
-  if (gp < 0.25) vfx.glow(ctx, lerp(wx, tip, gp*4), e.y + e.h/2, 16, 'spikeTip', 0.8);
-}
-function drawPlant(e) { if (e.state !== 'pending') ea.drawEnt(ctx, e, colX(e.c), rowY(e.r)); }
-const PICKUP_HOOPS = [-14, 14];
-function drawPickupBarrel(e) {
-  const x = e.x, y = e.y, p = 0.5 + 0.5*Math.sin(G.time*0.008);
-  vfx.glow(ctx, x, y, 34, 'lantern', 0.45 + 0.25*p);
-  ctx.save(); ctx.translate(x, y); ctx.scale(0.5, 0.5);
-  let bg = GC.pickup;
-  if (!bg) { bg = GC.pickup = ctx.createLinearGradient(-30, 0, 30, 0); bg.addColorStop(0, PAL.woodDark); bg.addColorStop(0.5, PAL.wood); bg.addColorStop(1, PAL.woodDark); }
-  ctx.fillStyle = bg; ctx.beginPath(); ctx.moveTo(-24, -26); ctx.quadraticCurveTo(-34, 0, -24, 26); ctx.lineTo(24, 26); ctx.quadraticCurveTo(34, 0, 24, -26); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = PAL.ironGlint; ctx.lineWidth = 5; for (const hy of PICKUP_HOOPS) { ctx.beginPath(); ctx.moveTo(-29, hy); ctx.lineTo(29, hy); ctx.stroke(); }
-  ctx.restore();
-}
-function drawCoins() {
-  for (const c of G.coins) {
-    const sx = Math.abs(Math.cos(c.t*3)) * 0.8 + 0.2;
-    vfx.glow(ctx, c.x, c.y, 18, 'lantern', 0.45);
-    ctx.save(); ctx.translate(c.x, c.y); ctx.scale(sx, 1);
-    let g = GC.coin;
-    if (!g) { g = GC.coin = ctx.createRadialGradient(-3, -3, 1, 0, 0, 9); g.addColorStop(0, PAL.lanternCore); g.addColorStop(0.5, PAL.lantern); g.addColorStop(1, PAL.wood); }
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 8.5, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'rgba(90,53,24,.7)'; ctx.beginPath(); for (let i=0;i<4;i++) { const a = i*Math.PI/2 + 0.4; ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*6, Math.sin(a)*6); ctx.lineTo(Math.cos(a+0.6)*2.5, Math.sin(a+0.6)*2.5); } ctx.fill();
-    ctx.restore();
-  }
-}
-function drawEnts() {
-  for (const e of G.ents) if (e.type === 'stacheln') drawSpikes(e);
-  for (const e of G.ents) if (e.type === 'beisspflanze' || e.type === 'spuckpflanze') drawPlant(e);
-  for (const e of G.ents) {
-    if (e.type === 'krabbler') drawKrabbler(e);
-    else if (e.type === 'fledermaus') drawBat(e);
-    else if (e.type === 'fass') drawPickupBarrel(e);
-  }
-  for (const p of G.projectiles) {
-    vfx.glow(ctx, p.x, p.y, 14, '#4E7A3A', 1);
-    ctx.fillStyle = '#E2283C'; ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = '#2F5B4A'; ctx.lineWidth = 2; ctx.stroke();
-  }
 }
 
 /* ===================================================================== RENDER: FX
@@ -1677,36 +1316,29 @@ function drawRecord() {
   ctx.strokeText(lbl, W/2, y - 8); ctx.fillStyle = '#4FF0FF'; ctx.fillText(lbl, W/2, y - 8);
   ctx.restore();
 }
-function drawGridHints() {
-  // very subtle anchor dots of the 9 positions (orientation aid, not warnings)
-  ctx.fillStyle = 'rgba(159,216,255,.07)';
-  for (const [c, r] of CELLS) { ctx.beginPath(); ctx.arc(colX(c), rowY(r), 3, 0, Math.PI*2); ctx.fill(); }
-}
 function drawVignette() {
-  // Puls-Vignette + Flash kommen aus vfx.drawScreen(); hier nur der dauerhafte Rand in Ninja-Form (vorgerendert)
-  if (!N.barrel && G.state === 'play') ctx.drawImage(LAYERS.edge, 0, 0, W, WORLD_H);
+  if (G.state === 'play' && N.daubes <= 2) { ctx.globalAlpha = N.daubes <= 1 ? 1 : 0.6; ctx.drawImage(LAYERS.edge, 0, 0, W, WORLD_H); ctx.globalAlpha = 1; }
 }
-
 function render() {
   ctx.save();
-  vfx.applyShake(ctx);            // abklingender Trauma-Shake (Modul), Reduced Motion → aus
+  vfx.applyShake(ctx);
   drawBackground();
   drawLanterns();
   drawSideWalls();
-  vfx.drawWall(ctx);              // Wandrisse/Löcher (Krabbler, Pflanzen)
+  vfx.drawWall(ctx);
   drawDust();
-  drawGridHints();
-  drawCoins();
   drawRecord();
-  drawEnts();
-  ea.drawCorpses(ctx);            // Treffer-/Tod-Animationen (Leichen-Pool)
   drawRope();
-  for (const e of G.ents) if (e.type === 'seilschneider') drawCutter(e);
+  drawStackAndClimbers();
+  ea.drawCorpses(ctx);
   drawNinja();
-  vfx.draw(ctx);                  // Hieb-Trails, Partikel, Treffer-Flashes, Seilenden
+  drawBats();
+  drawFallers();
+  vfx.draw(ctx);
   drawFog();
   drawTexts();
   ctx.restore();
+  drawCoil();
   drawVignette();
   vfx.drawScreen(ctx, W, WORLD_H);
 }
@@ -1729,49 +1361,31 @@ function updateFx(dtMs) {   // Partikel/Hiebe laufen im VFX-Pool (vfx.update); h
 function burst(x, y, n, cols, sp) {   // Funken-/Splitter-Burst → Partikel-Pool des VFX-Moduls (nur Palettenfarben)
   vfx.emit(x, y, n, { kind:'dot', colors:cols, speed:[sp*0.3, sp], life:[350, 650], size:[1.6, 3.8], g:500, vy:-40 });
 }
-
-/* ===================================================================== COINS */
-function updateCoins(dtMs, dy) {
-  const cc = BALANCE.pickups.coins;
-  for (const c of G.coins) {
-    c.t += dtMs/1000;
-    if (c.fixed) { c.life -= dtMs; if (c.life <= 0) c.done = true; } else c.y -= dy;
-    if (!c.done && Math.hypot(N.x - c.x, N.y - c.y) < bodyR() + 12) {
-      c.done = true; G.coinsRun++; Store.data.coins++;
-      AudioMgr.play('score_pickup'); burst(c.x, c.y, 6, ['#FFE2A8','#FFB347'], 120);
-      if (c.chain) { G.chainGot[c.chain] = (G.chainGot[c.chain] || 0) + 1;
-        if (G.chainGot[c.chain] === cc.chainLength) { G.coinsRun += cc.chainBonusCoins; Store.data.coins += cc.chainBonusCoins; Missions.add('chain');
-          G.texts.push({ x:c.x, y:c.y - 20, txt:'Kette! +' + cc.chainBonusCoins, t:0, life:1000, col:'#FFB347' }); } }
-    }
-    if (c.y < -30) c.done = true;
-  }
-  let nc = 0; for (const c of G.coins) if (!c.done) G.coins[nc++] = c; G.coins.length = nc;
-}
-function cellCoin(c, r, life = 3500) { G.coins.push({ x:colX(c), y:rowY(r), fixed:true, life, t:0 }); }
-
-/* ===================================================================== TUTORIAL (first run, skippable) */
-function tutorialUpdate(dtMs) {
+/* ===================================================================== TUTORIAL (erster Lauf, überspringbar): 3 Einblendungen */
+function tutStep(i) { const T = G.tutorial; T.step = i; T.st = 0; T.missed = 0; T.released = 0; T.best = 0; T.spawned = false; UI.tutText(BALANCE.tutorial.steps[i]); }
+function tutorialUpdate(dt) {
   const T = G.tutorial; if (!T) return;
-  T.timers = (T.timers || []).filter(tm => { tm.in -= dtMs; if (tm.in <= 0) { tm.fn(); return false; } return true; });
-  if (T.waitId != null) {
-    if (!G.ents.some(e => e.id === T.waitId)) runTutSpawn(T.waitStep);   // left without being killed → again
-    return;
+  T.t += dt; T.st += dt;
+  const sp = BALANCE.tutorial.climberSpeedPx, empty = !G.climbers.length && !G.stack.length;
+  switch (T.step) {
+    case -1: tutStep(0); break;
+    case 0:
+      if (empty && T.st > 700) spawnClimber(-30, sp);
+      if (N.knot && G.stack.length) tutStep(1);
+      break;
+    case 1:
+      if (T.released) { tutStep(2); break; }
+      if (!N.knot && !G.stack.length) tutStep(0);
+      break;
+    case 2:
+      if (!T.spawned && T.st > 900 && !N.knot && empty) { T.spawned = true; for (let i = 0; i < 3; i++) spawnClimber(-30 - i * 52, sp + 10); }
+      if (T.best >= 3) { tutStep(3); break; }
+      if (T.spawned && empty && T.st > 1500) { T.spawned = false; T.st = 0; UI.tutText('Fast! Lass alle drei hängen, dann erst lösen.'); }
+      break;
+    case 3:
+      if (T.st > 2600) endTutorial();
+      break;
   }
-  T.t += dtMs;
-  const steps = BALANCE.tutorial.steps;
-  while (T.step < steps.length && T.t >= steps[T.step].atMs) { const s = steps[T.step++]; if (s.end) { endTutorial(); return; } if (s.text) UI.tutText(s.text); if (s.spawn) runTutSpawn(s); }
-}
-function runTutSpawn(s) {
-  const T = G.tutorial; let e = null;
-  switch (s.spawn) {
-    case 'coinsSides': cellCoin(-1, 0); T.timers.push({ in:1600, fn:() => cellCoin(1, 0) }); break;
-    case 'coinsDiagonal': cellCoin(-1, -1); T.timers.push({ in:1800, fn:() => cellCoin(1, 1) }); break;
-    case 'tutKrabbler': e = spawnWall(1, 'krabbler', { y:rowY(0), targetRow:0, tut:true, windupOverride:s.windupMs }); Object.assign(e, { row:0, state:'idle', idleT:s.idleMs }); break;
-    case 'tutStacheln': spawnSpike(1, { y:rowY(0) + 170, len:1, hRows:1 }); break;
-    case 'tutFledermaus': e = spawnWall(-1, 'fledermaus', { y:rowY(0), targetRow:0, tut:true, windupOverride:s.windupMs }); Object.assign(e, { row:0, state:'idle', idleT:900 }); break;
-    case 'tutSeilschneider': e = spawnCutter({ descendMs:s.descendMs }); break;
-  }
-  if (s.waitUntilKilled && e) { T.waitId = e.id; T.waitStep = s; } else if (T.waitStep === s) { T.waitId = null; }
 }
 function endTutorial() {
   Store.data.tutorialDone = true; Store.save();
@@ -1782,69 +1396,64 @@ function endTutorial() {
 /* ===================================================================== MAIN UPDATE */
 function update(dtMs) {
   if (G.state === 'pause') return;
-  // Hit-Stop (40–60 ms) liegt im VFX-Modul; G.hitStop bleibt als externer Freeze (Tests/Debug) erhalten.
   const ext = G.hitStop > 0, stopped = ext || vfx.frozen;
-  const wdt = vfx.update(dtMs, ext ? 0 : G.slowMo);        // Shake/Flash/Vignette klingen ab, Partikel nur wenn Welt läuft
-  ea.update(ext ? 0 : (wdt ?? dtMs * G.slowMo));           // Leichen altern mit Welt-dt
+  const wdt = vfx.update(dtMs, ext ? 0 : G.slowMo);
+  ea.update(ext ? 0 : (wdt ?? dtMs * G.slowMo));
   if (ext) { G.hitStop -= dtMs; return; }
   if (stopped) return;
   const dt = dtMs * G.slowMo;
   updateFx(dt);
+  updateFallers(dt);
   if (G.state !== 'play') {
     const go = BALANCE.gameOver;
-    const dt = G.state === 'dying' && performance.now() - G.overAt < go.slowMoMs ? dtMs * go.slowMoScale : dtMs;   // kurzer Todes-Moment
-    const idle = G.state === 'dying' ? 0 : 30 * dt/1000;
-    G.bgOff += idle; G.sideOff += idle; G.time += dt; ambient(dt, idle);
-    if (G.state === 'dying') { const s = dt/1000; N.fall.vy += 1500*s; N.y += N.fall.vy*s; N.x += N.fall.vx*s; }
-    else { N.x = colX(0) + Math.sin(G.time*0.0012)*18; N.y = rowY(0) + 30; N.vx = Math.cos(G.time*0.0012)*20; }
+    const dt2 = G.state === 'dying' && performance.now() - G.overAt < go.slowMoMs ? dtMs * go.slowMoScale : dtMs;
+    const idle = G.state === 'dying' ? 0 : 30 * dt2/1000;
+    G.bgOff += idle; G.sideOff += idle; G.time += dt2; ambient(dt2, idle);
+    if (G.state === 'dying') { const s = dt2/1000; N.fall.vy += 1500*s; N.y += N.fall.vy*s; N.x += N.fall.vx*s; updateBats(dt2); }
+    else { N.x = W/2 + Math.sin(G.time*0.0012)*14; N.y = REST_Y + 10; N.vx = Math.cos(G.time*0.0012)*20; }
     return;
   }
   G.time += dt;
   if (!G.tutorial) updateWave(dt);
-  const sc = BALANCE.scroll, mps = G.tutorial ? BALANCE.tutorial.scrollMps : Math.min(sc.speedMps.max, sc.speedMps.start + sc.speedMps.perMeter*G.depth) * (N.barrel ? 1 : sc.noBarrelSpeedMult)
-    * (G.wave.phase === 'rest' ? (BALANCE.waves.restScrollMult || 1) : 1);
+  const sc = BALANCE.scroll, mps = G.tutorial ? BALANCE.tutorial.scrollMps : Math.min(sc.speedMps.max, sc.speedMps.start + sc.speedMps.perMeter*G.depth)
+    * (G.wave.phase === 'rest' ? (sc.restMult || 1) : 1);
   G.scrollPx = mps * PX_PER_M;
   const dy = G.scrollPx * dt / 1000, dm = dy / PX_PER_M;
   G.bgOff += dy; G.sideOff += dy; ambient(dt, dy);
   if (!G.tutorial) {
     const prevM = Math.floor(G.depth);
     G.depth += dm;
-    const base = dm * BALANCE.score.pointsPerMeter * (N.barrel ? 1 : BALANCE.score.noBarrelScoreMult);
-    const mult = BALANCE.score.combo.appliesToDepth ? G.combo.mult : 1;
+    const base = dm * BALANCE.score.pointsPerMeter, mult = BALANCE.score.combo.appliesToDepth ? G.combo.mult : 1;
     G.scoreF += base * mult; G.parts.depth += base; G.parts.multBonus += base * (mult - 1);
     if (Math.floor(G.depth) !== prevM) meterTick();
+    G.rope -= dm;   // Absinken verbraucht Seil
+    if (G.rope <= BALANCE.rope.lowM && !G.lowWarned) { G.lowWarned = true; G.texts.push({ x:W/2, y:REST_Y + 120, txt:'Seil wird knapp – wirf Kletterer ab!', t:0, life:1600, col:'#EC7380', size:17 }); AudioMgr.play('warning', { vol:0.6 }); }
+    if (G.rope <= 0) { G.rope = 0; gameOver('rope'); return; }
   }
-  updateCoins(dt, dy);
-  G.threats = computeThreats();
-  updateNinja(dt);
-  { const nvy = (N.y - spLastY) / Math.max(0.001, dt / 1000); spLastY = N.y;
-    speed.update(dt, N.x, N.y, N.vx, nvy + G.scrollPx, !N.barrel); }
-  checkSlashHits();
-  decisionQueue(dt);
-  G.slowMoReq = 1;
-  updateEnts(dt);
-  G.slowMo = G.slowMoReq;
-  if (!G.noSpawn) spawner();
-  AudioMgr.setLoop('rope_cutting_loop', G.ents.some(e => e.type === 'seilschneider' && e.state === 'cut' && !e.dead));
-  if (!G.tutorial) AudioMgr.updateMusicForDepth(G.depth);   // debug flag (tests)
+  updateBarrel(dt);
+  { const nvy = (N.y - N.lastY || 0) / Math.max(0.001, dt / 1000); N.lastY = N.y; speed.update(dt, N.x, N.y, N.vx, nvy + G.scrollPx, false); }
+  updateClimbers(dt);
+  if (G.state === 'play') updateStack(dt);
+  if (G.state === 'play') updateBats(dt);
+  if (G.state !== 'play') return;
+  if (!G.noSpawn && !G.tutorial) spawner();
+  AudioMgr.setLoop('rope_cutting_loop', G.stack.some(e => e.type === 'seilschneider'));
+  if (!G.tutorial) AudioMgr.updateMusicForDepth(G.depth);
   tutorialUpdate(dt);
   comboDecay();
   UI.hud();
 }
-/* Wellen (v0.3): aktiv → Atempause. Während der Pause keine neuen Angriffe, Münzen kommen. */
+/* Wellen: aktiv → Atempause (keine neuen Kletterer/Fledermäuse) → aktiv … */
 function updateWave(dt) {
-  const wv = BALANCE.waves, w = G.wave, m = G.depth, es = BALANCE.escalation, k = escSteps(m);
+  const wv = BALANCE.waves, w = G.wave, m = G.depth;
   if (!wv) return;
-  if (!w.dur) { w.dur = stepVal(wv.activeMs, m) + k * es.waveActivePlusMs; w.surge = wv.surgeEvery && (w.idx + 1) % wv.surgeEvery === 0; }
+  if (!w.dur) { w.dur = stepVal(wv.activeMs, m); w.surge = wv.surgeEvery && (w.idx + 1) % wv.surgeEvery === 0; }
   w.t += dt;
   if (w.t < w.dur) return;
   if (w.phase === 'active') {
-    if (w.surge) addBonus(wv.surgeBonus, W/2, REST_Y - 150, 'WELLE ÜBERSTANDEN!', '#FFB347');
-    w.phase = 'rest'; w.t = 0; w.coinsGiven = false;
-    w.dur = Math.max(es.waveRestMinMs, stepVal(wv.restMs, m) - k * es.waveRestMinusMs) + (w.surge ? 1000 : 0);
-  } else {
-    w.phase = 'active'; w.t = 0; w.idx++; w.dur = 0;
-  }
+    if (w.surge) addBonus(wv.surgeBonus, W/2, REST_Y - 170, 'WELLE ÜBERSTANDEN!', '#FFB347');
+    w.phase = 'rest'; w.t = 0; w.dur = stepVal(wv.restMs, m) + (w.surge ? 1000 : 0);
+  } else { w.phase = 'active'; w.t = 0; w.idx++; w.dur = 0; G.nextClimbAt = Math.max(G.nextClimbAt, G.time + 300); }
 }
 /* Pro Meter: Meilensteine, Rekord-Jagd, Missionen */
 function meterTick() {
@@ -1853,16 +1462,15 @@ function meterTick() {
   for (const ms of sc.milestones) if (m >= ms.m && !G.milestonesHit[ms.m]) { G.milestonesHit[ms.m] = true; bonus = ms.bonus; }
   const last = sc.milestones[sc.milestones.length - 1].m;
   if (sc.milestoneEveryMAfter && m > last && (m - last) % sc.milestoneEveryMAfter === 0 && !G.milestonesHit[m]) { G.milestonesHit[m] = true; bonus = m * sc.milestoneBonusPerM; }
-  if (bonus) { const mu = G.combo.mult || 1, tot = Math.round(bonus * mu);   // (v0.3) Meilenstein × Combo → Combo halten lohnt sich
+  if (bonus) { const mu = G.combo.mult || 1, tot = Math.round(bonus * mu);
     G.scoreF += tot; G.parts.milestones += bonus; G.parts.multBonus += tot - bonus; UI.toast(m + ' m!  +' + tot + (mu > 1 ? '  (x' + mu + ')' : '')); AudioMgr.play('ui_confirm'); Haptics.buzz([20,40,20]); }
-  // Rekord-Laterne überholt
   if (G.recordDepth >= 15 && !G.recordHit && G.depth >= G.recordDepth) {
     G.recordHit = true;
-    G.texts.push({ x:W/2, y:REST_Y - 120, txt:'NEUER REKORD!', t:0, life:1400, col:'#4FF0FF', size:30 });
+    G.texts.push({ x:W/2, y:REST_Y - 150, txt:'NEUER REKORD!', t:0, life:1400, col:'#4FF0FF', size:30 });
     burst(W/2, REST_Y, 22, ['#4FF0FF','#E2283C','#FFE2A8'], 300); vfx.screenFlash(0.25); AudioMgr.play('new_highscore', { vol:0.8 }); Haptics.buzz([30,40,30]);
   }
   Missions.runMax('depth', m);
-  if (!G.run.barrelLost) Missions.runMax('barrelDepth', m);
+  if (!G.run.hurt) Missions.runMax('cleanDepth', m);
 }
 
 /* ===================================================================== UI */
@@ -1895,9 +1503,7 @@ const UI = {
     if (!G.tutorial && rd >= 15) { if (G.recordHit) { db = 'NEUER REKORD!'; dc = 'rec'; } else if (left <= BALANCE.record.hudCountdownWithinM) { db = 'noch ' + Math.ceil(left) + ' m bis Rekord'; dc = 'near'; } }
     this.set('depthBest', db); if (dc !== this._dc) { this._dc = dc; $('depthBest').className = dc; }
     this.set('coins', G.coinsRun);
-    const cd = cutterActiveVisible(); if (cd !== this._cd) { this._cd = cd; $('hudCenter').classList.toggle('dim', cd); }   // Seilschneider nie hinter der Tiefenanzeige
-    this.set('barrelTxt', N.barrel ? 'Fass' : 'Ninja');
-    if (this._last.bicon !== N.barrel) { this._last.bicon = N.barrel; $('bicon').classList.toggle('off', !N.barrel); }
+    const cd = G.climbers.some(e => e.type === 'seilschneider' && e.y < 130); if (cd !== this._cd) { this._cd = cd; $('hudCenter').classList.toggle('dim', cd); }   // Seilschneider nie hinter der Tiefenanzeige
   },
   comboPop() { const el = $('combo'); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); clearTimeout(this._cp); this._cp = setTimeout(() => el.classList.remove('pop'), 140); },
   missions() { Missions.render($('menuMissions')); $('menuCoins').textContent = Store.data.coins; },
@@ -1909,7 +1515,8 @@ const UI = {
     ch.textContent = txt; ch.classList.toggle('hidden', !txt);
     Missions.render($('overMissions'));
     $('overScore').textContent = score; $('overBest').textContent = best; $('overDepth').textContent = depth + ' m'; $('overCoins').textContent = coins;
-    $('overReason').textContent = reason === 'rope' ? 'Das Seil wurde durchgeschnitten!' : 'Erwischt – ohne Fass ist ein Treffer tödlich.';
+    $('overReason').textContent = ({ snap:'Zu viele am Knoten – das Seil ist gerissen!', cut:'Der Seilschneider hat den Knoten durchgesägt!',
+      rope:'Dein Seil ist aufgebraucht!', barrel:'Dein Fass ist zerbrochen!' })[reason] || 'Erwischt!';
     $('newBest').classList.toggle('hidden', !isNew);
   },
   updateMute() {
@@ -1928,7 +1535,7 @@ function startGame(forceTutorial) {
   Missions.refresh();
   resetRun(tut);
   setState('play');
-  if (tut) { UI.tutText(BALANCE.tutorial.steps[0].text); $('tutSkip').classList.toggle('hidden', !BALANCE.tutorial.skippable); }
+  if (tut) { UI.tutText(BALANCE.tutorial.steps[0]); $('tutSkip').classList.toggle('hidden', !BALANCE.tutorial.skippable); }
   AudioMgr.startRunMusic();
 }
 function togglePause() {
@@ -1937,61 +1544,23 @@ function togglePause() {
 }
 
 /* ===================================================================== INPUT
-   Swipe anywhere: only the dominant axis counts (no diagonals; corners = two swipes). */
-let sw = null;
-function classify(dx, dy) {
-  // keine Diagonalen: nur die dominante Achse zählt (45° → horizontal = Angriff); Ecken = zwei Wischer
-  return Math.abs(dx) * (BALANCE.grid.axisBiasHorizontal || 1) >= Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
-}
+   Ein Finger, ein Tipp irgendwo: Knoten binden – nochmal tippen: Knoten lösen. */
 function overReady() { const ok = G.state === 'over' && G.overShownAt != null && performance.now() - G.overShownAt >= BALANCE.gameOver.inputLockAfterCardMs;
   if (ok) $('over').classList.remove('lock'); return ok; }
 function onDown(e) {
   if (e.target.closest && e.target.closest('button')) return;
   if (e.cancelable) e.preventDefault();
+  if (e.isPrimary === false) return;
   AudioMgr.unlock();
-  if (overReady()) { AudioMgr.play('ui_confirm'); startGame(); sw = null; return; }   // Tippen/Wischen irgendwo = nochmal
-  const t = e.timeStamp || performance.now();
-  sw = { id:e.pointerId, ox:e.clientX, oy:e.clientY, ot:t, ax:e.clientX, ay:e.clientY, lx:e.clientX, ly:e.clientY, lt:t, lastDir:null, fired:0 };
-}
-function swStep(x, y, t) {
-  const g = BALANCE.grid;
-  // Finger ruht → neuer Anker (langsame Wischer funktionieren, gleiche Richtung danach wieder erlaubt)
-  // (still = seit dem letzten Event >StillMs vergangen UND kaum bewegt – langsame/gedrosselte Geräte resetten nicht fälschlich)
-  const mv = Math.hypot(x - sw.lx, y - sw.ly), gap = t - sw.lt, still = gap > g.swipeAnchorResetStillMs && mv / gap < 0.015;   // < 15 px/s = Finger ruht
-  sw.lx = x; sw.ly = y; sw.lt = t;
-  if (still) { sw.ax = x; sw.ay = y; sw.lastDir = null; return; }
-  const dx = x - sw.ax, dy = y - sw.ay;
-  if (Math.hypot(dx, dy) < (sw.fired ? g.chainSwipeMinDp : g.swipeMinDp)) return;
-  const [cx, cy] = classify(dx, dy), k = cx + ',' + cy;
-  sw.ax = x; sw.ay = y;
-  if (k === sw.lastDir && g.sameDirNeedsPause) return;   // derselbe Strich läuft weiter → kein Doppel-Auslösen
-  input(cx, cy); sw.lastDir = k; sw.fired++;
-}
-function onMove(e) {
-  if (!sw || e.pointerId !== sw.id) return;
-  const list = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
-  if (list && list.length) { for (const p of list) swStep(p.clientX, p.clientY, p.timeStamp || e.timeStamp); }
-  else swStep(e.clientX, e.clientY, e.timeStamp || performance.now());
-}
-function onUp(e) {
-  if (!sw || e.pointerId !== sw.id) return;
-  if (e.type === 'pointerup') {
-    swStep(e.clientX, e.clientY, e.timeStamp || performance.now());
-    const g = BALANCE.grid, dx = e.clientX - sw.ox, dy = e.clientY - sw.oy, dt = (e.timeStamp || performance.now()) - sw.ot;
-    // kurzer Flick, der unter der Schwelle blieb (oder dessen Move-Events fehlten) → trotzdem ein Wischer
-    if (!sw.fired && Math.hypot(dx, dy) >= g.flickFallbackMinDp && dt <= g.flickFallbackMaxMs) { const [cx, cy] = classify(dx, dy); input(cx, cy); }
-  }
-  sw = null;
+  if (overReady()) { AudioMgr.play('ui_confirm'); startGame(); return; }   // Tippen irgendwo = nochmal
+  if (G.state === 'play') tap();
 }
 stage.addEventListener('pointerdown', onDown, { passive:false });
-window.addEventListener('pointermove', onMove, { passive:true });
-window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
-const KEYMAP = { ArrowLeft:[-1,0], KeyA:[-1,0], ArrowRight:[1,0], KeyD:[1,0], ArrowUp:[0,-1], KeyW:[0,-1], ArrowDown:[0,1], KeyS:[0,1] };
 window.addEventListener('keydown', e => {
   if (e.repeat) return;
-  if (KEYMAP[e.code]) { e.preventDefault(); if (G.state === 'play') input(...KEYMAP[e.code]); return; }
   if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
-  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (G.state === 'menu' || overReady()) startGame(); else if (G.state === 'pause') togglePause(); }
+  if (e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault();
+    if (G.state === 'play') tap(); else if (G.state === 'menu' || overReady()) startGame(); else if (G.state === 'pause') togglePause(); }
 });
 document.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
 document.addEventListener('gesturestart', e => e.preventDefault());
@@ -2038,7 +1607,7 @@ document.addEventListener('visibilitychange', () => { last = performance.now(); 
 // iOS: unlock/resume audio on the first (and any later) real user gesture
 ['touchend', 'pointerdown', 'keydown', 'click'].forEach(ev => document.addEventListener(ev, () => AudioMgr.unlock(), { capture:true, passive:true }));
 const isLandscapeBlocked = () => window.matchMedia && matchMedia('(orientation:landscape) and (max-height:500px)').matches;
-window.addEventListener('resize', () => { resize(); if (G.state !== 'play') { N.x = colX(0); } else if (isLandscapeBlocked()) togglePause(); });
+window.addEventListener('resize', () => { resize(); if (G.state !== 'play') { N.x = W/2; } else if (isLandscapeBlocked()) togglePause(); });
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 
 /* App icon renderer (used to generate icons/*.png) */
@@ -2056,8 +1625,8 @@ function drawIcon(c, size) {
 resize(); resetRun(false); UI.updateMute(); setState('menu');
 if (document.fonts && document.fonts.load) { ['20px "Russo One"', '20px Bungee', '600 16px Rubik'].forEach(f => document.fonts.load(f).catch(() => {})); }
 requestAnimationFrame(frame);
-window.__bn = { G, N, BALANCE, input, spawnWall, spawnSpike, spawnCutter: (o = {}) => spawnCutter({ now:true, ...o }), startGame, setState, ninjaCell, colX, rowY, computeThreats, hurt, drawIcon, endTutorial, Store,
-  AudioMgr, AUDIO_EXTS, render, Loadout, vfx, ea, scarf, speed, Missions, Quality, fairOK, reachableInOneSwipe, activeAttacks, maxConcurrentNow, version: BUILD, get W() { return W; } };
+window.__bn = { G, N, BALANCE, tap, tie, untie, spawnClimber, spawnCutter, spawnBat, startGame, setState, hurt, gameOver, drawIcon, endTutorial, Store,
+  AudioMgr, AUDIO_EXTS, render, Loadout, vfx, ea, Missions, Quality, stackWeight, slotY, knotY, ropeEnd, version: BUILD, get W() { return W; } };
 // balance.json (optional): Overrides werden tief in BALANCE gemergt (Schlüssel mit _ werden ignoriert)
 fetch('balance.json', { cache:'no-cache' }).then(r => r.ok ? r.json() : null).then(j => { if (j && typeof j === 'object') { deepMerge(BALANCE, j); ea.setBalance(BALANCE); } }).catch(() => {});
 
