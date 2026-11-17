@@ -1,14 +1,21 @@
 # Barrel Ninja
-Handyspiel-Prototyp: ein Ninja im Fass hängt am Seil und steigt in einen alten Brunnen hinab.
+Handyspiel-Prototyp: ein Ninja im Fass seilt sich in einen alten Brunnenschacht ab.
 
 **Spielen:** https://hasanbeg99.github.io/kagewell/
 
-v0.3-Gameplay (3×3-Raster, Wischen, Seilschneider, Wellen, Combo, Missionen) im Look der 90er-Jahre-Konsolen (16 Bit):
-- niedrige interne Auflösung (~195×422 auf dem Handy), scharf hochskaliert ohne Weichzeichnen
-- 32-Farben-Palette mit Bayer-Dithering, 1-px-Konturen an den Figuren, Steinmauern mit Parallax
-- Pixel-Schrift, ruckartiger Bildschirm-Shake in ganzen Pixeln, Paletten-Blitze bei Treffern
-- 8-Bit-Soundeffekte und Musik per WebAudio (Menü: „KLANG: 8-BIT / MODERN“)
-- optionale Scanlines (Menü: „CRT: AN/AUS“, Standard aus)
+## v2 „Abseil“
+- **Abseilen statt Raster:** nach unten ziehen = schneller abseilen, nach oben = ein Stück hochklettern, loslassen = langsam weiter. Links/rechts frei, mit leichtem Pendel.
+- Relative Steuerung wie ein virtueller Stick (folgt dem Finger), einhändig spielbar.
+- **Tippen = Schlag** zum nächsten Gegner (sonst in Blickrichtung). Treffer-Stopp, jeder 4. Treffer der Kombo ist ein großer **SMASH**.
+- Eigene Gegner: Mauerkriecher (holen sichtbar aus: glühendes Auge, Warnstreifen), Seilkrähen (stoßen herab oder picken das Seil an, also wegschlagen!), Dornenranken, Stachelfelsen, Stromfelder.
+- Wellen mit Atempausen, Abschnitte alle 100 m (3 Gebiete), Tiefe = Punkte, Münzen und Reisbällchen (+1 Herz), Belohnungen für Wellen und knappe Ausweicher.
+- **Laden:** Münzen gegen Outfits tauschen (wird lokal gespeichert).
+- Tastatur: Pfeiltasten + Leertaste, P = Pause.
+
+## Grafik
+Moderne HD-Pixelgrafik: handgesetzte Pixel-Sprites mit Konturen, Schattierung und Dithering, immer in ganzzahligen Gerätepixeln skaliert (gestochen scharf auch bei DPR 2,625). Darüber Parallax, weiches Licht und Glühen, Partikel und Staub. Bei schwacher Hardware werden die weichen Lichtebenen automatisch abgeschaltet.
+
+Nur die Spielidee des Abseilens ist an klassische Konsolen-Abseil-Level angelehnt. Alle Figuren, Grafiken, Namen und Klänge sind eigene.
 
 Komplett eigenständig, keine externen Anfragen.
 
