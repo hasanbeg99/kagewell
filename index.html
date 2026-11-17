@@ -205,10 +205,10 @@
     </div>
     <div class="card" style="margin-top:14px">
       <ul class="howto">
-        <li><span class="k">&lt;&gt;</span><span>Ziehen: Das Fass folgt deinem Finger und schwingt am Seil.</span></li>
-        <li><span class="k">v</span><span>Runter ziehen = schneller abseilen. Loslassen = langsam sinken. Hoch = zurückklettern.</span></li>
+        <li><span class="k">&lt;&gt;</span><span>Links/rechts ziehen (überall): Das Fass folgt deinem Finger und schwingt leicht am Seil.</span></li>
+        <li><span class="k">v</span><span>Das Fass sinkt von selbst und wird tiefer immer schneller. In den Pausen zwischen den Wellen wird es langsamer.</span></li>
         <li><span class="k">/</span><span>Kurz tippen = Schlag! Jeder 4. Treffer in Folge ist ein SMASH.</span></li>
-        <li><span class="k red">!</span><span>Vögel picken am Seil: schnell hin und wegschlagen. Dornen und Strom umfliegen.</span></li>
+        <li><span class="k red">!</span><span>Vögel picken am Seil: schnell hin und wegschlagen. Dornen, Felsen und Strom seitlich ausweichen.</span></li>
       </ul>
     </div>
     <div class="card" style="margin-top:10px;padding:12px 16px"><div class="mhead" style="margin-top:0">Missionen · <span style="color:var(--gold)"><span id="menuCoins">0</span> Münzen</span></div><ul class="missions" id="menuMissions"></ul></div>
@@ -217,7 +217,7 @@
       <button class="btn ghost small" id="crtBtn">CRT: AUS</button>
       <button class="btn ghost small" id="sndBtn">KLANG: 8-BIT</button>
     </div>
-    <div class="kbd">Tastatur: Pfeile / WASD · Leertaste = Schlag · P = Pause</div>
+    <div class="kbd">Tastatur: ← → / A D · Leertaste = Schlag · P = Pause</div>
   </div>
 
   <div class="overlay dim hidden" id="shop">
@@ -268,7 +268,7 @@
 <script>
 (() => {
 'use strict';
-const BUILD = 'v2.0-abseil';   // Build-Marker (Deploy-Check)
+const BUILD = 'v3.0-auto';   // Build-Marker (Deploy-Check)
 const BALANCE = {};
 /* ===================================================================== SPEICHER */
 const Store = {
@@ -843,10 +843,9 @@ const Chip = {
 /* ===================================================================== TUNING (alle Spielwerte an einer Stelle) */
 const T = {
   M: 16,                                   // Kunstpixel pro Meter
-  descend: 1.9, fast: 7.2, climb: 3.0,     // m/s: loslassen = langsam abseilen, ziehen runter = schneller, hoch = klettern
-  climbBackM: 5,                           // so weit darf man über den tiefsten Punkt zurückklettern
-  stiff: 110, damp: 15,                    // seitliches Pendel (Feder zur Fingerposition, leichtes Nachschwingen)
-  dragGain: 1.35, deadDp: 12, fullDp: 64,  // Touch: relativer Zug (CSS-px), Totzone und Vollausschlag vertikal
+  autoMin: 2.7, autoMax: 4.5, autoSec: 0.12, pauseMul: 0.55,   // m/s: automatischer Abstieg (steigt sanft mit Tiefe/Abschnitten, in Atempausen langsamer)
+  stiff: 300, damp: 24, keySpeed: 200,     // seitlich: direkte Feder zum Finger, nur leichtes Nachschwingen
+  dragGain: 1.5,                           // Touch: relativer Zug (CSS-px → Kunstpixel)
   tapMs: 240, tapDp: 11,                   // Tap = kurz und ohne Bewegung
   hurtR: 8, hp: 3, invMs: 1300,            // großzügige Spieler-Trefferzone (Sprite ist 26 px breit)
   atkCd: 170, reachX: 56, reachUp: 40, reachDown: 34, ropeReach: 110,
@@ -862,9 +861,13 @@ const G = { state:'menu', time:0, depth:0, maxY:0, bonus:0, kills:0, coinsRun:0,
   wave:{ phase:'active', t:0, idx:0, hit:false }, nextEvY:0, nextBirdT:0, nextPeckT:0, nextSnackM:0, section:0,
   noHitFrom:0, over:null, overShown:true, overAt:0, overShownAt:0, deathReason:'', idSeq:1, noSpawn:false, hints:{} };
 const P = { x:0, y:0, vx:0, vy:0, tx:0, face:1, hp:3, inv:0, atkT:0, atkCd:0, atkDir:1, atkUp:false, dead:false, fall:{ vx:0, vy:0, spin:0, rot:0 }, ax:0, blinkT:0, nudge:0 };
-const I = { drag:null, fast:0, climb:0, keys:{} };
+const I = { drag:null, keys:{} };
 const score = () => Math.floor(G.depth * 10 + G.bonus);
 const diff = () => clamp(G.depth / 450, 0, 1);
+function autoSpeed() {   // m/s
+  const base = Math.min(T.autoMax, lerp(T.autoMin, T.autoMax, diff()) + G.section * T.autoSec);
+  return base * (G.wave.phase === 'pause' ? T.pauseMul : 1) * (G.startRamp ?? 1);
+}
 
 /* ===================================================================== CANVAS / SKALIERUNG
    Gerätepixel-genaue Canvas (CSS × devicePixelRatio). Ein Kunstpixel = PX Gerätepixel (ganzzahlig) →
@@ -965,7 +968,7 @@ function ent(o) { const e = Object.assign({ id: G.idSeq++, t:0, hp:1, dead:false
 function spawnCreep(side, y, o = {}) {
   y = clearOfLantern(side, y);
   return ent({ type:'creep', side, x: wallX(side) + (side < 0 ? 2 : -2), y, state:'cling', cd: o.cd ?? 300, ext:0, hp: o.hp || (diff() > 0.45 && Math.random() < 0.35 ? 2 : 1),
-    reach: innerW() * lerp(0.42, 0.66, diff()), windMs: lerp(820, 540, diff()), anim: Math.random() * 1000, ...o });
+    reach: innerW() * lerp(0.30, 0.42, diff()), windMs: lerp(820, 540, diff()), anim: Math.random() * 1000, ...o });
 }
 function clearOfLantern(side, y) {   // Lesbarkeit: Gegner nie direkt neben einer hellen Wandlaterne
   const i = Math.round((y - 40) / 150), ly = i * 150 + 40, ls = (i & 1) ? 1 : -1;
@@ -1007,7 +1010,7 @@ function hazardDist(e, px, py) {
   return Infinity;
 }
 function creepHead(e) { return wallX(e.side) - e.side * (e.ext + 23); }
-function zapSpan(e) { const iw = innerW(); return e.mode === 'full' ? [WW, VW - WW] : e.mode === 'left' ? [WW, WW + iw * 0.58] : [VW - WW - iw * 0.58, VW - WW]; }
+function zapSpan(e) { const iw = innerW(); if (e.span) return e.span; return e.mode === 'full' ? [WW, VW - WW] : e.mode === 'left' ? [WW, WW + iw * 0.58] : [VW - WW - iw * 0.58, VW - WW]; }
 function attackable(e) { return !e.dead && (e.type === 'creep' || e.type === 'bird') && (e.type !== 'bird' || e.state !== 'enter' || e.x > -4 && e.x < VW + 4); }
 
 function updateEnts(dt) {
@@ -1018,7 +1021,7 @@ function updateEnts(dt) {
     const sy = e.y - G.camY;   // Bildschirmhöhe (Kunstpixel)
     if (e.type === 'creep') {
       e.anim += ms;
-      if (e.state === 'cling') { e.cd -= ms; if (e.cd <= 0 && Math.abs(P.y - e.y) < 64 && sy > 24 && sy < VH - 30 && !P.dead) { e.state = 'windup'; e.t = 0; AudioMgr.play('warning', { vol:0.45 }); } }
+      if (e.state === 'cling') { e.cd -= ms; if (e.cd <= 0 && e.y - P.y < P.vy * (e.windMs + 150) / 1000 + 12 && e.y - P.y > -16 && sy > 24 && sy < VH - 30 && !P.dead) { e.state = 'windup'; e.t = 0; AudioMgr.play('warning', { vol:0.45 }); } }
       else if (e.state === 'windup') { if (e.t >= e.windMs) { e.state = 'lunge'; e.t = 0; AudioMgr.play('swipe', { vol:0.7 }); } }
       else if (e.state === 'lunge') { e.ext = e.reach * easeOut(e.t / 300); if (e.t >= 300) { e.state = 'hold'; e.t = 0; } }
       else if (e.state === 'hold') { if (e.t >= 140) { e.state = 'back'; e.t = 0; } }
@@ -1058,7 +1061,7 @@ function updateBird(e, ms) {
       if (e.t > 700) { e.state = 'aim'; e.t = 0; AudioMgr.play('warning', { vol:0.4 }); }
     } else if (e.state === 'aim') {
       e.y += (G.camY + clamp(P.y - G.camY - 70, 40, VH * 0.5) - e.y) * Math.min(1, ms / 300);
-      e.tx = px; e.ty = py;
+      e.tx = px; e.ty = py + P.vy * 0.25;
       if (e.t >= e.aimMs) { e.state = 'dive'; e.t = 0; const a = Math.atan2(e.ty - e.y, e.tx - e.x); e.vx = Math.cos(a) * 250; e.vy = Math.sin(a) * 250; e.side = e.vx > 0 ? -1 : 1; AudioMgr.play('swipe', { vol:0.6 }); }
     } else if (e.state === 'dive') {
       e.x += e.vx * ms / 1000; e.y += e.vy * ms / 1000;
@@ -1169,13 +1172,17 @@ function spawner(dt) {
     if (G.wave.phase === 'pause' || m < 0.6) { if (Math.random() < 0.7) spawnCoins(y, Math.random() < 0.5 ? 'line' : 'arc'); G.nextEvY += 90; continue; }
     const k = weighted({ creep: 3.2, rock: m > 4 ? 2 : 0, vine: m > 12 ? 2.1 : 0, zap: m > 40 ? 1.5 + d : 0, coins: 1.2 });
     const side = Math.random() < 0.5 ? -1 : 1;
-    if (k === 'creep') { spawnCreep(side, y); if (d > 0.3 && Math.random() < 0.35) spawnCreep(-side, y + 46); }
+    if (k === 'creep') { spawnCreep(side, y); if (d > 0.3 && Math.random() < 0.35) { const gapY = Math.max(56, autoSpeed() * T.M * 1.1); spawnCreep(-side, y + gapY); G.nextEvY += gapY; } }
     else if (k === 'rock') { spawnRock(side, y); if (Math.random() < 0.4) spawnCoins(y - 30, 'arc'); }
     else if (k === 'vine') spawnVine(side, y);
-    else if (k === 'zap') { const full = d > 0.12 && Math.random() < 0.45; spawnZap(y, full ? 'full' : (side < 0 ? 'left' : 'right')); G.nextEvY += full ? 60 : 20; }
+    else if (k === 'zap') {
+      if (d > 0.12 && Math.random() < 0.45) {   // Strom über die ganze Breite, aber immer mit einer Lücke zum Durchsteuern
+        const gap = 25, gx = rand(XL + 14, XR - 14), base = { t: 0, offMs: rand(1400, 2000) };
+        spawnZap(y, 'left', { ...base, span: [WW, gx - gap] }); spawnZap(y, 'right', { ...base, span: [gx + gap, VW - WW] }); G.nextEvY += 40;
+      } else { spawnZap(y, side < 0 ? 'left' : 'right'); G.nextEvY += 20; } }
     else spawnCoins(y, Math.random() < 0.5 ? 'line' : 'arc');
     if (m > G.nextSnackM) { spawnSnack(y + 40); G.nextSnackM = m + (P.hp < T.hp ? rand(35, 50) : rand(60, 85)); }
-    G.nextEvY += lerp(165, 84, d) + rand(0, 40);
+    G.nextEvY += Math.max(lerp(165, 92, d) + rand(0, 40), autoSpeed() * T.M * 1.25);   // fester Abstieg: mind. ~1,25 s Reaktionszeit zwischen Gefahren
   }
   if (G.wave.phase === 'active') {
     G.nextBirdT -= dt; G.nextPeckT -= dt;
@@ -1209,28 +1216,27 @@ function updatePlayer(dt) {
   }
   // Tastatur
   const kx = (I.keys.ArrowRight || I.keys.KeyD ? 1 : 0) - (I.keys.ArrowLeft || I.keys.KeyA ? 1 : 0);
-  if (kx) P.tx += kx * 150 * dt;
-  const fast = Math.max(I.fast, I.keys.ArrowDown || I.keys.KeyS ? 1 : 0), climb = Math.max(I.climb, I.keys.ArrowUp || I.keys.KeyW ? 1 : 0);
+  if (kx) P.tx += kx * T.keySpeed * dt;
   P.tx = clamp(P.tx, XL, XR);
   // seitlich: Feder + Dämpfung → leichtes Pendeln, Nudge beim Schlag
   const ax = (P.tx + P.nudge - P.x) * T.stiff - P.vx * T.damp; P.nudge *= Math.pow(0.001, dt);
   P.vx += ax * dt; P.x += P.vx * dt;
   if (P.x < XL) { P.x = XL; P.vx = Math.abs(P.vx) * 0.3; } if (P.x > XR) { P.x = XR; P.vx = -Math.abs(P.vx) * 0.3; }
   if (Math.abs(P.vx) > 25) P.face = Math.sign(P.vx);
-  // vertikal: Abseilen / schneller / zurückklettern
-  const want = (T.descend + fast * (T.fast - T.descend) - climb * (T.descend + T.climb)) * T.M;
-  P.vy += (want - P.vy) * Math.min(1, dt * 7);
+  // vertikal: automatischer Abstieg (nur seitlich steuerbar)
+  G.startRamp = Math.min(1, (G.startRamp ?? 0) + dt / 1.2);
+  const want = autoSpeed() * T.M;
+  P.vy += (want - P.vy) * Math.min(1, dt * 2.5);
   P.y += P.vy * dt;
-  const minY = G.maxY - T.climbBackM * T.M; if (P.y < minY) { P.y = minY; P.vy = Math.max(0, P.vy); }
   if (P.y > G.maxY) G.maxY = P.y;
   const prevD = G.depth; G.depth = Math.max(G.depth, G.maxY / T.M);
   if (Math.floor(G.depth) !== Math.floor(prevD)) { Missions.runMax('depth', Math.floor(G.depth)); Missions.runMax('nohit', Math.floor(G.depth - G.noHitFrom)); AudioMgr.updateMusicForDepth(G.depth); }
-  if (fast > 0.5 && Math.random() < 0.02) AudioMgr.ropeCreak();
+  if (Math.random() < 0.004) AudioMgr.ropeCreak();
   // Seilanker oben folgt träge → Seil schwingt sichtbar
   P.ax += (P.x - P.ax) * Math.min(1, dt * 1.6);
 }
 function updateCamera(dt) {
-  const k = clamp(P.vy / (T.fast * T.M), 0, 1), target = P.y - VH * (0.38 - 0.08 * k);
+  const k = clamp((P.vy / T.M - T.autoMin) / (T.autoMax - T.autoMin), 0, 1), target = P.y - VH * (0.38 - 0.08 * k);
   if (!P.dead) G.camY += (target - G.camY) * Math.min(1, dt * 6);
 }
 function updatePickups(dt) {
@@ -1274,9 +1280,9 @@ function tutorial(dt) {
   G.tutorialT += dt * 1000; const t = G.tutorialT;
   const step = t < 4200 ? 0 : t < 8400 ? 1 : t < 12000 ? 2 : 3;
   if (step !== G.tutStep) { G.tutStep = step;
-    if (step === 0) UI.hint('Ziehen = bewegen · runter = schneller abseilen', 4000);
+    if (step === 0) UI.hint('Links/rechts ziehen = ausweichen', 4000);
     else if (step === 1) { UI.hint('Kurz tippen = Schlag!', 4000); if (!G.ents.some(e => e.type === 'creep')) spawnCreep(P.x < VW / 2 ? -1 : 1, P.y + 120, { cd:1200 }); }
-    else if (step === 2) UI.hint('Nach oben ziehen = zurückklettern', 3400);
+    else if (step === 2) UI.hint('Das Fass sinkt von selbst. Nur ausweichen und schlagen!', 3400);
     else { G.tutorialT = null; Store.data.tutorialDone = true; Store.save(); } }
 }
 
@@ -1589,9 +1595,9 @@ $('shopList').addEventListener('click', e => { const b = e.target.closest('butto
 function resetRun() {
   Object.assign(G, { time:0, depth:0, maxY:0, bonus:0, kills:0, coinsRun:0, combo:0, comboAt:-1e9, ents:[], coins:[], parts:[], texts:[], hitStop:0, shake:0, flash:0,
     camY: -VH * 0.38, wave:{ phase:'active', t:0, idx:0, hit:false }, nextEvY: VH * 0.62, nextBirdT: 3, nextPeckT: 6, nextSnackM: 45, section:0, noHitFrom:0,
-    over:null, overShown:true, deathReason:'', tutorialT:null, tutStep:-1 });
+    over:null, overShown:true, deathReason:'', tutorialT:null, tutStep:-1, startRamp:0 });
   Object.assign(P, { x: VW / 2, y:0, vx:0, vy:0, tx: VW / 2, face:1, hp:T.hp, inv:0, atkT:0, atkCd:0, atkDir:1, atkUp:false, dead:false, ax: VW / 2, nudge:0 });
-  I.drag = null; I.fast = 0; I.climb = 0;
+  I.drag = null;
 }
 function setState(s) { G.state = s; UI.show(s); }
 function startGame() {
@@ -1609,7 +1615,7 @@ function showOverNow() { const o = G.over; if (!o || G.overShown) return; G.over
 function overReady() { const ok = G.state === 'over' && performance.now() - G.overShownAt >= 400; if (ok) $('over').classList.remove('lock'); return ok; }
 
 /* ===================================================================== EINGABE
-   Ein Finger: ziehen = Fass folgt relativ dem Finger (links/rechts frei, runter = schneller, hoch = klettern),
+   Ein Finger: ziehen = Fass folgt relativ dem Finger (nur links/rechts, das Fass sinkt automatisch),
    kurzer Tap ohne Bewegung = Schlag. Zweiter Finger tippt = sofortiger Schlag. Tastatur: Pfeile/WASD + Leertaste. */
 function cssToArt() { return VW / stage.getBoundingClientRect().width; }
 function onDown(e) {
@@ -1626,12 +1632,11 @@ function onMove(e) {
   P.tx = clamp(d.tx0 + dx * cssToArt() * T.dragGain, XL, XR);
   // virtueller Stick folgt dem Finger vertikal (nie mehr als 90 px Ausschlag)
   if (dy > 90) { d.y0 += dy - 90; dy = 90; } else if (dy < -90) { d.y0 += dy + 90; dy = -90; }
-  I.fast = clamp((dy - T.deadDp) / (T.fullDp - T.deadDp), 0, 1); I.climb = clamp((-dy - T.deadDp) / (T.fullDp - T.deadDp), 0, 1);
 }
 function onUp(e) {
   const d = I.drag; if (!d || d.id !== e.pointerId) return;
   if (d.maxD < T.tapDp && performance.now() - d.t0 < T.tapMs) attack();
-  I.drag = null; I.fast = 0; I.climb = 0;
+  I.drag = null;
 }
 stage.addEventListener('pointerdown', onDown);
 window.addEventListener('pointermove', onMove);
@@ -1671,7 +1676,7 @@ function frame(now) {
   adaptQuality(now - last, now);
   let dt = (now - last) / 1000; last = now; if (dt > 0.05) dt = 0.05; if (dt < 0) dt = 0;
   if (G.state === 'menu' || G.state === 'shop') { menuDrift += dt; G.camY = menuDrift * 14 - VH * 0.38; P.y = G.camY + VH * 0.4; P.x = VW / 2 + Math.sin(menuDrift * 0.8) * 18; P.ax = VW / 2; G.time += dt * 1000; }
-  else { const steps = Math.max(1, Math.ceil(dt / 0.0084)); for (let i = 0; i < steps; i++) update(dt / steps); }
+  else if (!window.__bnSim) { const steps = Math.max(1, Math.ceil(dt / 0.0084)); for (let i = 0; i < steps; i++) update(dt / steps); }
   if (G.state === 'dying' && !G.overShown && performance.now() - G.overAt >= 650) showOverNow();
   if (G.state === 'over') overReady();
   render();
