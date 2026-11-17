@@ -1,7 +1,7 @@
 // Service worker (v0.3): network-first with a 3 s timeout → falls back to the cache, so a bad mobile connection
 // never blocks the start. Audio: the page tells the worker which format this browser actually uses (ogg / m4a / mp3)
 // and the worker precaches exactly those files, so the game works offline.
-const CACHE = 'barrel-ninja-v3';
+const CACHE = 'barrel-ninja-v4';
 const NET_TIMEOUT_MS = 3000;
 const ASSETS = ['./', './index.html', './vfx/vfx.js', './vfx/ninja-anim.js', './vfx/enemy-anim.js', './balance.json', './manifest.json', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
   './fonts/press-start-2p.woff', './audio/manifest.json'];
