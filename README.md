@@ -1,17 +1,15 @@
-# Kagewell
+# Barrel Ninja
+Handyspiel-Prototyp: ein Ninja im Fass hängt am Seil und steigt in einen alten Brunnen hinab.
 
-Handyspiel-Prototyp (HTML5, offline, eine Datei + Assets). Ein Ninja hängt im Fass an einem Seil und sinkt in einen endlosen, mondbeschienenen Brunnen.
+**Spielen:** https://hasanbeg99.github.io/kagewell/
 
-## Kern: das Knotenfass (Ein-Finger-Tipp)
-- **Tippen irgendwo** knotet das Seil über dem Fass. Der Knoten hält alles auf, was herunterklettert (Kletterer, Seilschneider). Er kostet Seil: Das Fass ruckt hoch – das ist zugleich das Ausweichen vor Fledermäusen auf Fasshöhe.
-- **Nochmal tippen** löst den Knoten. Alle Gestauten stürzen ab: **10 · n² Punkte** (× Combo) und Seil zurück. Ab 5 auf einmal wird eine Daube repariert.
-- **Mehr als 6 am Knoten** → das Seil reißt (Game Over). Der Seilschneider zählt doppelt und sägt am Knoten – rechtzeitig lösen.
-- **Knapp knoten** (Kletterer fast am Fass) gibt einen Bonus mit Hit-Stop.
-- **Seil = Vorrat und Tiefe**: Absinken verbraucht Seil (Spule unten links). Leer = Game Over.
-- **Leben = Dauben**: Jeder Treffer bricht eine Daube aus dem Fass, keine Herzen im HUD.
-- Bleibt aus v0.3: Wellen mit Atempausen, Combo bis x5, Missionen, Rekord-Laterne, Sound, VFX, schneller Neustart, kurzes Tutorial (3 Einblendungen) beim ersten Lauf.
+v0.3-Gameplay (3×3-Raster, Wischen, Seilschneider, Wellen, Combo, Missionen) im Look der 90er-Jahre-Konsolen (16 Bit):
+- niedrige interne Auflösung (~195×422 auf dem Handy), scharf hochskaliert ohne Weichzeichnen
+- 32-Farben-Palette mit Bayer-Dithering, 1-px-Konturen an den Figuren, Steinmauern mit Parallax
+- Pixel-Schrift, ruckartiger Bildschirm-Shake in ganzen Pixeln, Paletten-Blitze bei Treffern
+- 8-Bit-Soundeffekte und Musik per WebAudio (Menü: „KLANG: 8-BIT / MODERN“)
+- optionale Scanlines (Menü: „CRT: AN/AUS“, Standard aus)
 
-Balancing: `BALANCE` in `index.html` (Kommentare je Wert), Overrides per `balance.json`.
-Die alte Swipe-Version ist als Tag `v0.3-barrel-ninja` gesichert.
+Komplett eigenständig, keine externen Anfragen.
 
-Lokal starten: `python3 -m http.server` im Ordner, dann `http://localhost:8000/` öffnen.
+Schrift: „Press Start 2P“ von CodeMan38, SIL Open Font License 1.1 (siehe `fonts/OFL-PressStart2P.txt`).

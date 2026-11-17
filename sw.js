@@ -1,10 +1,10 @@
-// Service worker (Kagewell v1.0): network-first with a 3 s timeout → falls back to the cache, so a bad mobile connection
+// Service worker (v0.3): network-first with a 3 s timeout → falls back to the cache, so a bad mobile connection
 // never blocks the start. Audio: the page tells the worker which format this browser actually uses (ogg / m4a / mp3)
 // and the worker precaches exactly those files, so the game works offline.
-const CACHE = 'kagewell-v1';
+const CACHE = 'barrel-ninja-retro-v1';
 const NET_TIMEOUT_MS = 3000;
 const ASSETS = ['./', './index.html', './vfx/vfx.js', './vfx/ninja-anim.js', './vfx/enemy-anim.js', './balance.json', './manifest.json', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
-  './fonts/bungee-latin.woff2', './fonts/russo-one-latin.woff2', './fonts/rubik-latin.woff2', './audio/manifest.json'];
+  './fonts/press-start-2p.woff', './audio/manifest.json'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(async c => {
     // einzeln cachen: ein fehlendes Asset bricht nicht alles ab, wird aber gemeldet
