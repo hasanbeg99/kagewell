@@ -180,6 +180,13 @@ let ui = {};
 let lastPickupM = 0;
 let pickupStep = -1;
 let pickup = null;
+let coins = [];
+let nextCoinY = 900;
+let runCoins = 0;
+let totalCoins = 0;
+let faintT = -1;
+let coinHud = { x: 16, y: 10, w: 16, h: 16 };
+const nochmal = { x: (W - 176) / 2, y: H / 2 + 62, w: 176, h: 52 };
 let ents = [];
 let spawnT = 900;
 let birdT = 6500;
@@ -269,6 +276,18 @@ const CREEP_MAP = [
   '...o.o.....o.o..........',
   '..o...o...o...o.........',
   '........................'];
+const COIN_MAP = [
+  '..oooo..',
+  '.oGGGGo.',
+  'oGgyygGo',
+  'oGyYYyGo',
+  'oGyYYyGo',
+  'oGgyygGo',
+  '.oGGGGo.',
+  '..oooo..'];
+const COIN_PAL = { o: OUTL, G: '#a85a00', g: '#ffd84a', y: '#ffd84a', Y: '#fff8c0' };
+const COIN_KEY = 'kagewell.prototyp.coins';
+const FAINT_FADE = 480;
 const BIRD_MAP = [
   '....oo......oo....',
   '...oBBo....oBBo...',
@@ -352,6 +371,7 @@ function buildArt() {
   art.creep.push(flipX(art.creep[0]));
   art.bird = [pixelBlit(bird, bird.width * 2, bird.height * 2)];
   art.bird.push(flipX(art.bird[0]));
+  art.coin = scaleInt(fromMap(COIN_MAP, COIN_PAL), 2);
   art.back = buildBack();
   art.wall = buildWall();
 }
@@ -482,6 +502,10 @@ function chooseSlashDir() {
 function onDown(e) {
   e.preventDefault();
   const p = logical(e);
+  if (faintT >= 0) {
+    if (faintT >= FAINT_FADE && inRect(p, nochmal)) startRun();
+    return;
+  }
   const half = p.x < W / 2 ? 'L' : 'R';
   let role = 'none';
   if (half === 'L' && inRect(p, ui.modeBtn)) role = 'mode';
@@ -626,10 +650,48 @@ function hurt() {
     barrel = 'broken';
     invuln = CONFIG.breakInvuln;
     vfx.barrelBreak(px, py + BH / 2, { hitStop: CONFIG.hitStopMs, shake: CONFIG.swingShake });
-  } else {
-    invuln = 480;
-    vfx.hit(px, py + 20, { type: 'fass', hitStop: CONFIG.hitStopMs, shake: 3 });
+  } else faint();
+}
+function loadTotal() {
+  try { const n = parseInt(localStorage.getItem(COIN_KEY), 10); return n > 0 ? n : 0; } catch (e) { return 0; }
+}
+function saveTotal() {
+  try { localStorage.setItem(COIN_KEY, String(totalCoins)); } catch (e) {}
+}
+function faint() {
+  if (faintT >= 0) return;
+  faintT = 0;
+  totalCoins += runCoins;
+  saveTotal();
+  vfx.hit(px, py + 20, { type: 'fass', hitStop: CONFIG.hitStopMs, shake: 3 });
+}
+function spawnCoin(screenX, screenY) {
+  coins.push({ x: screenX, worldY: depthPx + screenY, t: 0, got: false });
+}
+function seedCoins() {
+  coins = [];
+  spawnCoin(310, 420);
+  spawnCoin(150, 620);
+  spawnCoin(230, 760);
+  nextCoinY = depthPx + 900;
+}
+function updateCoins(dtMs) {
+  const horizon = depthPx + H + 50;
+  while (nextCoinY < horizon) {
+    const span = W - CONFIG.wall * 2 - 36;
+    coins.push({ x: CONFIG.wall + 18 + ((nextCoinY * 13) % span), worldY: nextCoinY, t: 0, got: false });
+    nextCoinY += 160;
   }
+  const body = barrelRect(px, py, 0);
+  for (const c of coins) {
+    c.t += dtMs;
+    if (c.got) continue;
+    const sy = c.worldY - depthPx;
+    const box = { x: c.x - 8, y: sy - 8, w: 16, h: 16 };
+    if (sy < -24) c.got = true;
+    else if (overlap(body, box)) { c.got = true; runCoins++; }
+  }
+  if (coins.length > 24) coins = coins.filter(c => !c.got && c.worldY - depthPx < H + 80);
 }
 
 function updateEnts(dtMs) {
@@ -1080,9 +1142,44 @@ function updatePick(dtMs) {
   }
 }
 
+function startRun() {
+  px = W / 2;
+  py = 380;
+  moveK = 0; holdMs = 0; coastDir = null; stickHeld = null; stickDir = null; axisLock = null;
+  sagPxLeft = 0; sagMsLeft = 0; visSag = 0;
+  topAmp = 0; topHold = 0; sideAmp = 0; sideWas = false;
+  barrel = 'intact';
+  spares = CONFIG.spareStart;
+  invuln = 0; equipT = 0; duckK = 0; duckT = 0; wasDuck = false;
+  recoil = 0; impact = 0;
+  slashPhase = null; slashT = 0; slashCd = 0; slashAge = -1; slashTrack = null; slashGhosts = [];
+  bufUntil = -1;
+  swingPhase = null; swingT = 0; swingU = 0; swingCd = 0; swingKills = 0; ghosts = []; ghostAcc = 0;
+  depthPx = 0; scrollV = CONFIG.scroll0;
+  score = 0;
+  runCoins = 0;
+  faintT = -1;
+  pickup = null; pickupStep = -1; lastPickupM = 0;
+  btnAnim = 0;
+  ropeAx = px;
+  ents = [];
+  vfx.clear();
+  scarf.reset();
+  initRope();
+  spawnBird(255, py + BH / 2 - 16, 8000, 'aim');
+  spawnBird(135, py + BH / 2 - 16, 8000, 'aim');
+  spawnCreep(-1, 1020);
+  spawnCreep(1, 1120);
+  seedCoins();
+}
 function step(dtMs) {
   dtMs = Math.min(dtMs, 1000 / 30);
   if (dtMs <= 0) return;
+  if (faintT >= 0) {
+    vfx.update(dtMs);
+    faintT += dtMs;
+    return;
+  }
   const world = vfx.update(dtMs);
   if (world <= 0) return;
   const dt = world;
@@ -1109,6 +1206,7 @@ function step(dtMs) {
   btnAnim = clamp(btnAnim + (wantBtn ? 1 : -1) * dt / 140, 0, 1);
   updateEnts(dt);
   updatePick(dt);
+  updateCoins(dt);
   tryAction();
   const vis = visuals();
   updateRope(dt, vis);
@@ -1314,6 +1412,54 @@ function drawEnt(e) {
   }
   ctx.restore();
 }
+function drawCoins() {
+  if (!art.coin) return;
+  for (const c of coins) {
+    if (c.got) continue;
+    const sy = c.worldY - depthPx + Math.sin(c.t * 0.006) * 2;
+    if (sy < -20 || sy > H + 20) continue;
+    ctx.drawImage(art.coin, Math.round(c.x - art.coin.width / 2), Math.round(sy - art.coin.height / 2));
+  }
+}
+function drawHud() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H) || 1;
+  const top = Math.max(8, insets().t / scale + 6);
+  const y = top + 16 > 148 ? 8 : top;
+  const x = W - Math.max(CONFIG.edgePad, 20 / scale) - 70;
+  coinHud = { x, y, w: 70, h: 16 };
+  if (!art.coin) return;
+  ctx.drawImage(art.coin, x, y);
+  ctx.save();
+  ctx.font = "8px 'PS2P', monospace";
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffd84a';
+  ctx.fillText(String(runCoins), x + 20, y + 4);
+  ctx.restore();
+}
+function drawFaint() {
+  if (faintT < 0) return;
+  const k = clamp(faintT / FAINT_FADE, 0, 1);
+  ctx.save();
+  ctx.fillStyle = 'rgba(5,7,15,' + (0.78 * easeOut(k)) + ')';
+  ctx.fillRect(0, 0, W, H);
+  if (k < 1) { ctx.restore(); return; }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f0d8a0';
+  ctx.font = "10px 'PS2P', monospace";
+  ctx.fillText('Kiro ist ohnmächtig', W / 2, H / 2 - 48);
+  ctx.font = "8px 'PS2P', monospace";
+  ctx.fillStyle = '#fff0b0';
+  ctx.fillText('Du behältst ' + runCoins + ' Münzen', W / 2, H / 2 - 8);
+  ctx.fillStyle = '#ffd84a';
+  ctx.fillText('Gesamt ' + totalCoins + ' Münzen', W / 2, H / 2 + 22);
+  pixelRect(nochmal.x, nochmal.y, nochmal.w, nochmal.h, '#a01a28', '#f0d8a0');
+  ctx.fillStyle = '#fff0b0';
+  ctx.font = "8px 'PS2P', monospace";
+  ctx.fillText('Nochmal', nochmal.x + nochmal.w / 2, nochmal.y + nochmal.h / 2 + 1);
+  ctx.restore();
+}
 function drawPickup() {
   if (!pickup) return;
   const sy = pickup.worldY - depthPx + Math.sin(pickup.t * 0.008) * 2;
@@ -1426,6 +1572,7 @@ function draw(realDt) {
   drawTiled(art.back, CONFIG.wall, 0, W - CONFIG.wall * 2, H, depthPx * 0.5);
   drawRope();
   for (const e of ents) drawEnt(e);
+  drawCoins();
   drawPickup();
   drawTiled(art.wall, 0, 0, CONFIG.wall, H, depthPx);
   ctx.save();
@@ -1439,7 +1586,9 @@ function draw(realDt) {
   vfx.drawScreen(ctx, W, H);
   ctx.imageSmoothingEnabled = false;
   drawUI(vis);
+  drawHud();
   if (showHit) drawHitboxes(vis);
+  drawFaint();
   fpsN++;
   fpsT += realDt;
   if (fpsT >= 500) { fps = fpsN / (fpsT / 1000); fpsN = 0; fpsT = 0; }
@@ -1456,12 +1605,9 @@ function frame(now) {
 }
 function boot() {
   buildArt();
+  totalCoins = loadTotal();
   resize();
-  initRope();
-  spawnBird(255, py + BH / 2 - 16, 8000, 'aim');
-  spawnBird(135, py + BH / 2 - 16, 8000, 'aim');
-  spawnCreep(-1, 1020);
-  spawnCreep(1, 1120);
+  startRun();
   window.addEventListener('resize', resize);
   canvas.addEventListener('pointerdown', onDown, { passive: false });
   canvas.addEventListener('pointermove', onMove, { passive: false });
@@ -1511,6 +1657,14 @@ window.__BN = {
   },
   get modeBtn() { return ui.modeBtn; },
   get hbBtn() { return ui.hbBtn; },
+  get runCoins() { return runCoins; },
+  get totalCoins() { return totalCoins; },
+  get faint() { return faintT >= FAINT_FADE; },
+  get coins() {
+    return coins.filter(c => !c.got).map(c => ({ x: c.x, y: c.worldY - depthPx }));
+  },
+  get hud() { return coinHud; },
+  get nochmal() { return nochmal; },
   CONFIG
 };
 
