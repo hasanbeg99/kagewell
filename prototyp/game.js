@@ -394,23 +394,30 @@ function insets() {
 }
 function layoutUI() {
   const s = insets();
-  const padL = Math.max(CONFIG.edgePad, s.l + CONFIG.safeExtra);
-  const padR = Math.max(CONFIG.edgePad, s.r + CONFIG.safeExtra);
-  const padB = Math.max(CONFIG.edgePad, s.b + CONFIG.safeExtra);
+  // Buttons are drawn in logical px, then the canvas is CSS-scaled. Meet the minima in CSS px.
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H) || 1;
+  const minL = (cssPx) => cssPx / scale;
+  const a = Math.max(CONFIG.actionSize, minL(64));
+  const b = Math.max(CONFIG.barrelBtn, minL(56));
+  const gap = Math.max(CONFIG.barrelGap, minL(24));
+  const edge = Math.max(CONFIG.edgePad, minL(20));
+  const padL = edge + s.l / scale;
+  const padR = edge + s.r / scale;
+  const padB = edge + s.b / scale;
   const padT = Math.max(8, s.t + 6);
-  const a = CONFIG.actionSize;
-  const extra = (CONFIG.actionHit - a) / 2;
+  const hitSize = Math.max(CONFIG.actionHit, a + (CONFIG.actionHit - CONFIG.actionSize));
+  const extra = (hitSize - a) / 2;
   ui.action = { x: padL, y: H - padB - a, w: a, h: a, hit: extra };
-  const b = CONFIG.barrelBtn;
   ui.barrel = {
-    x: ui.action.x + a + CONFIG.barrelGap,
+    x: ui.action.x + a + gap,
     y: ui.action.y + (a - b) / 2,
     w: b, h: b
   };
   ui.padT = padT;
   ui.padR = padR;
-  ui.modeBtn = { x: padL, y: padT, w: 36, h: 18 };
-  ui.hbBtn = { x: padL + 40, y: padT, w: 36, h: 18 };
+  const debugL = Math.max(CONFIG.edgePad, s.l + CONFIG.safeExtra);
+  ui.modeBtn = { x: debugL, y: padT, w: 36, h: 18 };
+  ui.hbBtn = { x: debugL + 40, y: padT, w: 36, h: 18 };
 }
 function logical(e) {
   const r = canvas.getBoundingClientRect();
@@ -442,8 +449,12 @@ function steer() {
   const ax = Math.abs(v.dx), ay = Math.abs(v.dy);
   const tan60 = Math.tan((45 + CONFIG.hysteresisDeg) * Math.PI / 180);
   const tan30 = Math.tan((45 - CONFIG.hysteresisDeg) * Math.PI / 180);
-  if (!axisLock) axisLock = ay > ax ? 'v' : 'h';
-  else if (axisLock === 'h' && ay > ax * tan60) axisLock = 'v';
+  // First lock uses the same ±15° band: exact 45°/225° (|dx|===|dy|) does not pick an axis.
+  if (!axisLock) {
+    if (ay > ax * tan60) axisLock = 'v';
+    else if (ay < ax * tan30) axisLock = 'h';
+    else { stickDir = null; return null; }
+  } else if (axisLock === 'h' && ay > ax * tan60) axisLock = 'v';
   else if (axisLock === 'v' && ay < ax * tan30) axisLock = 'h';
   stickDir = axisLock === 'h' ? (v.dx < 0 ? 'left' : 'right') : (v.dy < 0 ? 'up' : 'down');
   if (stickDir === 'left') lastSide = -1;
@@ -722,8 +733,7 @@ function canSwing() { return barrel === 'intact' && atWall(px) && !swingPhase; }
 function tryAction() {
   if (gameMs > bufUntil) return;
   if (swingPhase) return;
-  if (canSwing()) {
-    if (swingCd > 0) return;
+  if (canSwing() && swingCd <= 0) {
     startSwing();
     bufUntil = -1;
     return;
@@ -774,17 +784,14 @@ function swordHits() {
     if (!e.alive || e.slashId === slashSerial) continue;
     const p = eScreen(e);
     const dx = p.x - cx, dy = p.y - cy;
-    if (Math.abs(dy) > CONFIG.swordH) continue;
-    if (Math.hypot(dx, dy) > CONFIG.swordR) continue;
+    const dist = Math.hypot(dx, dy);
+    if (dist > CONFIG.swordR || dist < 1e-4) continue;
     let a = Math.atan2(dy, dx);
-    let ok = false;
-    if (slashDir > 0) ok = a >= -Math.PI / 2 - 0.2 && a <= ang + 0.15;
-    else {
-      if (a > 0) a -= TAU;
-      const lead = ang > 0 ? ang - TAU : ang;
-      ok = a <= -Math.PI / 2 + 0.2 && a >= lead - 0.15;
-    }
-    if (!ok) continue;
+    if (slashDir < 0 && a > 0) a -= TAU;
+    const up = -Math.PI / 2;
+    const lo = Math.min(up, ang), hi = Math.max(up, ang);
+    const eps = 0.02;
+    if (a < lo - eps || a > hi + eps) continue;
     e.slashId = slashSerial;
     killEnemy(e, slashDir, false);
     vfx.emit(p.x, p.y, 5, {
