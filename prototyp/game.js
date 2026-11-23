@@ -1,7 +1,7 @@
 /* Kagewell prototyp — smooth vector well. 120 Hz step, interpolated render. */
 (function () {
   'use strict';
-  const CFG = { step: 1 / 120, maxFrameDt: 0.05, dprMax: 2, dprMin: 1.25 };
+  const CFG = { step: 1 / 120, maxFrameDt: 0.05, dprMax: 3, dprMin: 1.25 };
   const qs = new URLSearchParams(location.search);
   const NO_SPAWN = qs.get('noSpawn') === '1';
   const DEBUG = qs.get('debug') === '1';
@@ -33,8 +33,39 @@
     faintButtonMs: 300, pointsPerMeter: 10,     coinPoints: 10, noBarrelScoreMult: 1.5, coinDropOnKillChance: 0.45
   };
   const W = 390, BH = C.barrelH, BW = C.barrelW, TAU = Math.PI * 2;
-  const HERO_W = 170, HERO_H = 220, HERO_AY = 156, HARNESS_DY = -22;
-  const LOOSE_W = 112, LOOSE_H = 154, LOOSE_AY = 100, LOOSE_HARNESS_DY = -54;
+  const SPRITE_SCALE = 1 / 3;
+  const FAINT_SCALE = 0.58;
+  const CHAR_PIV = {
+    'kiro-barrel-idle': { c: [240, 288], p: [120, 206], rope: 176 },
+    'kiro-barrel-title': { c: [240, 288], p: [120, 196], rope: 166 },
+    'kiro-barrel-swing': { c: [240, 288], p: [120, 205], rope: 174 },
+    'kiro-barrel-slash': { c: [240, 288], p: [120, 211], rope: 180 },
+    'kiro-barrel-duck': { c: [240, 288], p: [120, 220], rope: 196 },
+    'kiro-hang-nobarrel': { c: [156, 216], p: [78, 91], rope: 91 },
+    'kiro-lying-faint': { c: [360, 180], p: [180, 98] },
+    'kiro-situp-proud': { c: [216, 216], p: [108, 149] },
+    'tara-winch-ready': { c: [210, 270], p: [105, 264] },
+    'tara-bends-over-kiro': { c: [360, 270], p: [180, 148] }
+  };
+  const charImg = {};
+  function loadCharImages() {
+    return Promise.all(Object.keys(CHAR_PIV).map(name => new Promise(res => {
+      const img = new Image();
+      img.onload = () => { charImg[name] = img; res(); };
+      img.onerror = () => res();
+      img.src = 'assets/chars/game-3x/' + name + '.png';
+    })));
+  }
+  function drawChar(name, wx, wy, scale, alpha) {
+    const img = charImg[name];
+    const spec = CHAR_PIV[name];
+    if (!img || !spec) return;
+    const s = scale || SPRITE_SCALE;
+    ctx.save();
+    if (alpha != null) ctx.globalAlpha = alpha;
+    ctx.drawImage(img, wx - spec.p[0] * s, wy - spec.p[1] * s, spec.c[0] * s, spec.c[1] * s);
+    ctx.restore();
+  }
   const KEY = { coins: 'kagewell.prototyp.coins', bestD: 'kagewell.prototyp.bestDepth', bestS: 'kagewell.prototyp.bestScore', seen: 'kagewell.prototyp.seen' };
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -57,7 +88,7 @@
   let coinChainAt = 0, nextCoinM = 0, creakSide = 0, ropeCd = 0, hitStop = 0, breakFlash = 0;
   let bits = [];
   let uiNoch = null, uiTitel = null;
-  let shake = 0, pauseAt = 0, titleAt = 0, biomeShown = 'moon', biomeBlend = 1;
+  let shake = 0, pauseAt = 0, titleAt = 0, biomeShown = 'moon', biomeBlend = 1, breakPop = 0;
   const POOL = 120;
   const pool = [];
   for (let i = 0; i < POOL; i++) pool.push({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, r: 3, col: '#fff', grav: 0, px0: 0, py0: 0 });
@@ -144,7 +175,11 @@
     barrelBtn.y = act.y;
     if (barrelBtn.x + barrelBtn.d / 2 > restX - ringD / 2 - 8 / cssPer) barrelBtn.y = act.y - act.d / 2 - gapBtn - barrelBtn.d / 2;
     if (joyId == null && joyBack <= 0) joyAnchor = { x: restX, y: restY };
-    if (rootBake()) art = rootBake().build(viewScale * dpr);
+    const bakeKey = (viewScale * dpr).toFixed(3);
+    if (rootBake() && bakeKey !== resize.bakeKey) {
+      resize.bakeKey = bakeKey;
+      art = rootBake().build(viewScale * dpr);
+    }
   }
   function rootBake() { return window.KWBake || null; }
   function burst(x, y, n, col, speed, life, grav) {
@@ -439,6 +474,7 @@
     if (barrel === 'intact' && !(src && src.force)) {
       barrel = 'broken'; invuln = C.breakInvuln;
       breakFlash = 70;
+      breakPop = 1;
       bits = [];
       for (let i = 0; i < 10; i++) bits.push({ x: px, y: py + 30, vx: Math.cos(i) * (80 + i * 12), vy: -40 - i * 18, a: i, wood: true, life: 900 });
       bits.push({ x: px - 8, y: py + 24, vx: -90, vy: -80, a: 0, ring: true, life: 900 });
@@ -661,11 +697,27 @@
     for (const c of coins) if (c.got) c.fly += dt;
   }
 
+  function barrelSway() {
+    if (state !== 'play' && state !== 'portal') return 0;
+    const t = playMs / 1000;
+    const nearTop = Math.max(0, 1 - Math.min(1, depthM() / 14));
+    return Math.sin(t * (1.5 + nearTop * 0.8)) * C.hitboxSwayMax;
+  }
+  function poseName() {
+    if (barrel === 'broken') return 'kiro-hang-nobarrel';
+    if (slashPhase) return 'kiro-barrel-slash';
+    if (swingPhase) return 'kiro-barrel-swing';
+    if (duckT > C.duckMs * 0.3 && atWall()) return 'kiro-barrel-duck';
+    return 'kiro-barrel-idle';
+  }
   function harnessOf(x, y, rot, bob) {
+    const pose = poseName();
+    const spec = CHAR_PIV[pose];
     const cy = y + BH / 2 + (bob || 0);
-    const ly = barrel === 'intact' ? HARNESS_DY : LOOSE_HARNESS_DY;
-    const c = Math.cos(rot || 0), s = Math.sin(rot || 0);
-    return { x: x - ly * s, y: cy + ly * c };
+    const sx = x + barrelSway();
+    if (!spec) return { x: sx, y: cy - 10 };
+    const top = ((spec.rope != null ? spec.rope : spec.p[1]) - spec.p[1]) * SPRITE_SCALE;
+    return { x: sx, y: cy + top };
   }
   function initRope() {
     const h = harnessOf(px, py, 0, 0);
@@ -775,6 +827,7 @@
     KWAudio.setMusic(tier);
     tryAction();
     breakFlash = Math.max(0, breakFlash - dt);
+    if (breakPop > 0) breakPop = Math.max(0, breakPop - dt / 180);
     for (const b of bits) { b.x += b.vx * dt / 1000; b.y += b.vy * dt / 1000; b.vy += 400 * dt / 1000; b.a += dt * 0.01; b.life -= dt; }
     bits = bits.filter(b => b.life > 0);
     scarfStep(dt);
@@ -1051,31 +1104,30 @@
     ctx.stroke();
   }
   function drawPlayer(alpha) {
-    const x = lerpA(prev.px, px, alpha);
+    const x = lerpA(prev.px, px, alpha) + barrelSway();
     const y = lerpA(prev.py, py, alpha);
     const bob = lerpA(prev.sag, visSag, alpha);
-    const rot = lerpAng(prev.rot, visualRot(), alpha);
-    const imp = lerpA(prev.impact, impact, alpha);
+    const pose = poseName();
+    const spec = CHAR_PIV[pose];
     const hidden = barrel === 'broken' && invuln > 0 && ((invuln / 70) | 0) % 2 === 0;
-    const spr = barrel === 'broken' ? art && art.kiroLoose : art && art.kiro;
+    const pop = breakPop > 0 ? 1 + Math.sin(breakPop * Math.PI) * 0.16 : 1;
     ctx.save();
-    if (hidden) ctx.globalAlpha = 0.4;
     ctx.translate(x, y + BH / 2 + bob);
-    if (imp > 0) ctx.scale(1 + imp * 0.06, 1 - imp * 0.08);
-    if (rot) ctx.rotate(rot);
-    if (spr) {
-      if (barrel === 'broken') ctx.drawImage(spr, -LOOSE_W / 2, -LOOSE_AY, LOOSE_W, LOOSE_H);
-      else ctx.drawImage(spr, -HERO_W / 2, -HERO_AY, HERO_W, HERO_H);
+    if (pop !== 1) ctx.scale(pop, pop);
+    if (hidden) ctx.globalAlpha = 0.45;
+    if (spec && charImg[pose]) {
+      const s = SPRITE_SCALE;
+      ctx.drawImage(charImg[pose], -spec.p[0] * s, -spec.p[1] * s, spec.c[0] * s, spec.c[1] * s);
     }
-    if (breakFlash > 30) {
-      ctx.globalAlpha = clamp((breakFlash - 30) / 40, 0, 0.9);
+    if (breakFlash > 40) {
+      ctx.globalAlpha = clamp((breakFlash - 40) / 50, 0, 0.45);
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(0, -6, 28, 0, TAU);
+      ctx.arc(0, -8, 18, 0, TAU);
       ctx.fill();
     }
     ctx.restore();
-    if (barrel === 'intact' && !swingPhase) drawScarf(alpha);
+    void alpha;
   }
   function drawSword(alpha) {
     if (!slashPhase && prev.slashU <= 0.02) return;
@@ -1330,17 +1382,16 @@
       ctx.drawImage(art.barrelIcon, pickup.x - 16, sy - 20, 32, 36);
     }
     for (const e of ents) drawEnt(e, alpha);
-    if (swingPhase === 'fly' && ghosts.length && art && art.kiro) {
-      ctx.save();
+    if (swingPhase === 'fly' && ghosts.length && charImg['kiro-barrel-swing']) {
+      const spec = CHAR_PIV['kiro-barrel-swing'];
+      const s = SPRITE_SCALE;
       ghosts.forEach((g, i) => {
-        ctx.globalAlpha = 0.16 + i * 0.06;
         ctx.save();
+        ctx.globalAlpha = 0.14 + i * 0.05;
         ctx.translate(g.x, g.y + BH / 2);
-        ctx.rotate(swingDir * (g.t / C.swingMs) * TAU);
-        ctx.drawImage(art.kiro, -HERO_W / 2, -HERO_AY, HERO_W, HERO_H);
+        ctx.drawImage(charImg['kiro-barrel-swing'], -spec.p[0] * s, -spec.p[1] * s, spec.c[0] * s, spec.c[1] * s);
         ctx.restore();
       });
-      ctx.restore();
     }
     drawBits(alpha);
     drawPlayer(alpha);
@@ -1372,20 +1423,32 @@
       ctx.stroke();
     }
   }
-  function drawHud() {
+  function hudBoxes() {
     const top = (8 + insets().t) / cssPer;
-    const left = camX + 8 / cssPer;
-    const fs = Math.max(16, 16 / cssPer);
-    pill(left, top, 132 / cssPer, fs + 12, '#10182C', '#FFD84A');
-    if (art && art.coin) ctx.drawImage(art.coin, left + 6, top + 4, fs + 2, fs + 2);
-    label(String(runCoins), left + fs + 14, top + (fs + 12) / 2, fs * 0.85, '#FFD84A', 'left');
+    const gap = 8 / cssPer;
+    const h = Math.max(28, 30 / cssPer);
+    const coinW = 100 / cssPer;
+    const depthW = 92 / cssPer;
+    const coinX = 8 / cssPer;
+    let depthX = (W - depthW) / 2;
+    if (coinX + coinW + gap > depthX) depthX = coinX + coinW + gap;
+    const rightX = W - 96 / cssPer;
+    let dw = depthW;
+    if (depthX + dw + gap > rightX) dw = Math.max(70 / cssPer, rightX - gap - depthX);
+    return { top: top, h: h, coinX: coinX, coinW: coinW, depthX: depthX, depthW: dw, spareY: top + h + 6 / cssPer };
+  }
+  function drawHud() {
+    const b = hudBoxes();
+    const fs = Math.max(15, 15 / cssPer);
+    pill(b.coinX, b.top, b.coinW, b.h, '#10182C', '#FFD84A');
+    if (art && art.coin) ctx.drawImage(art.coin, b.coinX + 6, b.top + 4, b.h - 8, b.h - 8);
+    label(String(runCoins), b.coinX + b.h + 4, b.top + b.h / 2, fs * 0.9, '#FFD84A', 'left');
     const spCol = spares > 0 ? '#E8C48A' : '#8B93A6';
-    pill(left, top + fs + 16, 112 / cssPer, fs + 10, '#10182C', spCol);
-    if (art && art.barrelIcon) ctx.drawImage(art.barrelIcon, left + 6, top + fs + 16, 22, 24);
-    label('x' + spares, left + fs + 14, top + fs + 16 + (fs + 10) / 2, fs * 0.8, spCol, 'left');
-    const dw = 148 / cssPer;
-    pill(camX + viewW / 2 - dw / 2, top, dw, fs + 14, '#162033', '#EAD19B');
-    label(Math.floor(depthM()) + ' m', camX + viewW / 2, top + (fs + 14) / 2, Math.max(18, 20 / cssPer), '#F7F4EC', 'center');
+    pill(b.coinX, b.spareY, Math.min(b.coinW, 96 / cssPer), b.h - 2, '#10182C', spCol);
+    if (art && art.barrelIcon) ctx.drawImage(art.barrelIcon, b.coinX + 6, b.spareY + 2, 20, 22);
+    label('x' + spares, b.coinX + 30, b.spareY + (b.h - 2) / 2, fs * 0.85, spCol, 'left');
+    pill(b.depthX, b.top, b.depthW, b.h + 2, '#162033', '#EAD19B');
+    label(Math.floor(depthM()) + ' m', b.depthX + b.depthW / 2, b.top + (b.h + 2) / 2, Math.max(16, 18 / cssPer), '#F7F4EC', 'center');
     const pr = camX + viewW - 46 / cssPer;
     pill(pr, top, 38 / cssPer, 38 / cssPer, '#10182C', '#F4F1EA');
     ctx.fillStyle = '#F4F1EA';
@@ -1654,8 +1717,11 @@
     ctx.rotate(t * 1.2);
     if (art && art.portal) ctx.drawImage(art.portal, -74, -38, 148, 76);
     ctx.restore();
-    if (art && art.tara) ctx.drawImage(art.tara, mouth.x + 48, ground - 176, 96, 162);
-    if (art && art.kiro) ctx.drawImage(art.kiro, mouth.x - 188, ground - 210, HERO_W, HERO_H);
+    const hang = CHAR_PIV['kiro-barrel-title'];
+    const ropeEnd = mouth.y + 4;
+    const barrelY = hang ? ropeEnd - ((hang.rope - hang.p[1]) * SPRITE_SCALE) : mouth.y + 10;
+    drawChar('kiro-barrel-title', mouth.x, barrelY, SPRITE_SCALE, 1);
+    drawChar('tara-winch-ready', mouth.x + 108, ground, SPRITE_SCALE, 1);
     const pile = Math.min(12, totalCoins);
     for (let i = 0; i < pile; i++) drawCoinSprite(mouth.x - 150 + (i % 4) * 18, ground - 18 + ((i / 4) | 0) * 16, Math.cos(t * 3 + i));
     const appear = ease(clamp((performance.now() - titleAt) / 260, 0, 1));
@@ -1665,7 +1731,10 @@
     ctx.scale(0.94 + 0.06 * appear, 0.94 + 0.06 * appear);
     inkText('KAGEWELL', 0, 0, 42, '#FFD56A');
     inkText('Barrel Ninja', 0, 34, 16, '#F4E2B0');
+    inkText('Abstieg in den Brunnen', 0, 54, 13, '#F7E7C4');
     ctx.restore();
+    inkText('Stick bewegt', W / 2, 128, 13, '#F7E7C4');
+    inkText('Tippen schlägt  ·  Wand: Fass-Schwung', W / 2, 148, 13, '#F7E7C4');
     const by = viewH * 0.70;
     const bw = 260, bh = 64;
     const bx = camX + viewW / 2 - bw / 2;
@@ -1702,17 +1771,14 @@
     ctx.globalAlpha = 0.45;
     if (art && art.portal) ctx.drawImage(art.portal, mouth.x - 36, mouth.y - 18, 72, 36);
     ctx.restore();
-    const sit = faintT > 600;
-    const poseIn = ease(clamp((faintT - (sit ? 600 : 0)) / 260, 0, 1));
-    const kiro = sit
-      ? { x: 16, y: ground - 108, w: 132, h: 106 }
-      : { x: 6, y: ground - 58, w: 124, h: 58 };
+    const sit = faintT > 700;
+    const poseIn = ease(clamp(faintT / 280, 0, 1));
     ctx.save();
-    ctx.globalAlpha = 0.35 + 0.65 * poseIn;
-    if (sit && art && art.kiroSit) ctx.drawImage(art.kiroSit, kiro.x, kiro.y, kiro.w, kiro.h);
-    else if (art && art.kiroLie) ctx.drawImage(art.kiroLie, kiro.x, kiro.y, kiro.w, kiro.h);
+    ctx.globalAlpha = 0.4 + 0.6 * poseIn;
+    if (sit) drawChar('kiro-situp-proud', 150, ground - 6, FAINT_SCALE, 1);
+    else if (faintT < 320) drawChar('kiro-lying-faint', 150, ground - 18, FAINT_SCALE, 1);
+    else drawChar('tara-bends-over-kiro', 168, ground - 24, FAINT_SCALE, 1);
     ctx.restore();
-    if (art && art.taraLean) ctx.drawImage(art.taraLean, 154, ground - 100, 68, 96);
     const shown = Math.min(runCoins, Math.ceil(clamp((faintT - 150) / 1050, 0, 1) * Math.max(0, runCoins)));
     if (shown > coinPop) { KWAudio.play('score_pickup', { semi: shown }); coinPop = shown; }
     const pile = Math.min(shown, 12);
@@ -1828,6 +1894,7 @@
     if (dt < 0) dt = 0;
     const clamped = dt > CFG.maxFrameDt ? CFG.maxFrameDt : dt;
     integrate(clamped);
+    if (state !== 'play' && window.KWAudio && KWAudio.stepDecode) KWAudio.stepDecode();
     render(acc / CFG.step);
     if (state === 'play') {
       const wallMs = dt * 1000;
@@ -1880,8 +1947,8 @@
           actionHit: cssBox(act.x - act.hit / 2, act.y - act.hit / 2, act.hit, act.hit),
           barrel: barrelBtn.show ? cssBox(barrelBtn.x - barrelBtn.d / 2, barrelBtn.y - barrelBtn.d / 2, barrelBtn.d, barrelBtn.d) : null,
           spare: cssBox(camX + 8 / cssPer, (8 + insets().t) / cssPer + 16 / cssPer + 14, 100 / cssPer, 16 / cssPer + 8),
-          depth: cssBox(camX + viewW / 2 - 74 / cssPer, (8 + insets().t) / cssPer, 148 / cssPer, 36 / cssPer),
-          coins: cssBox(camX + 8 / cssPer, (8 + insets().t) / cssPer, 132 / cssPer, 32 / cssPer),
+          coins: (function () { const b = hudBoxes(); return cssBox(b.coinX, b.top, b.coinW, b.h); })(),
+          depth: (function () { const b = hudBoxes(); return cssBox(b.depthX, b.top, b.depthW, b.h + 2); })(),
           pause: cssBox(camX + viewW - 48 / cssPer, (8 + insets().t) / cssPer, 40 / cssPer, 38 / cssPer),
           mute: cssBox(camX + viewW - 96 / cssPer, (8 + insets().t) / cssPer, 40 / cssPer, 38 / cssPer),
           spielen: cssBox(camX + viewW / 2 - 130, viewH * 0.70, 260, 64),
@@ -1951,6 +2018,10 @@
   function onShow() { last = -1; acc = 0; resize(); }
   async function boot() {
     titleAt = performance.now();
+    await loadCharImages();
+    if (window.KWAudio && KWAudio.prefetch) {
+      KWAudio.prefetch(['ui_confirm', 'portal_enter', 'sword_slash', 'music_calm_loop', 'ambience_well_loop', 'score_pickup', 'barrel_break', 'player_hit', 'tara_wake', 'meadow_ambience_loop']);
+    }
     totalCoins = store.get(KEY.coins, 0) || 0;
     bestD = store.get(KEY.bestD, 0) || 0;
     bestS = store.get(KEY.bestS, 0) || 0;

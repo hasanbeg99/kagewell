@@ -21,10 +21,10 @@
     g.closePath();
   }
   const BIO = {
-    moon: { sky: '#16385A', mid: '#102438', deep: '#070E18', stone: '#6E8EAE', stoneDim: '#3C5874', joint: '#1A2C40', moss: '#2F6A58', glow: 'rgba(180,220,255,0.55)' },
-    moss: { sky: '#14382C', mid: '#0E241C', deep: '#07140E', stone: '#6E9A78', stoneDim: '#345844', joint: '#14281C', moss: '#3E8A52', glow: 'rgba(170,220,160,0.5)' },
-    ember: { sky: '#4A2418', mid: '#2A1410', deep: '#120806', stone: '#C48460', stoneDim: '#6A4030', joint: '#2A1610', moss: '#8A4030', glow: 'rgba(255,180,90,0.55)' },
-    crystal: { sky: '#2C2458', mid: '#181430', deep: '#0A0818', stone: '#B0A0E0', stoneDim: '#5A4A88', joint: '#221C3A', moss: '#6A78C8', glow: 'rgba(210,200,255,0.55)' }
+    moon: { sky: '#5E94BE', mid: '#3E6E96', deep: '#2C5878', stone: '#8EADC8', stoneDim: '#5A7A98', joint: '#2A4864', moss: '#3E8A68', glow: 'rgba(200,230,255,0.6)' },
+    moss: { sky: '#4E8A68', mid: '#3A6E52', deep: '#2A5640', stone: '#8EBE98', stoneDim: '#4E7A5C', joint: '#244838', moss: '#5EAA68', glow: 'rgba(190,230,180,0.55)' },
+    ember: { sky: '#A85A40', mid: '#7A4030', deep: '#5A3024', stone: '#E0A080', stoneDim: '#A06048', joint: '#5A3428', moss: '#C06048', glow: 'rgba(255,200,140,0.6)' },
+    crystal: { sky: '#6A5CA8', mid: '#4A4080', deep: '#3A3468', stone: '#C8BCE8', stoneDim: '#7A6CB0', joint: '#3A3468', moss: '#8890D0', glow: 'rgba(220,210,255,0.6)' }
   };
 
   function hoop(g, x, y, w, h) {

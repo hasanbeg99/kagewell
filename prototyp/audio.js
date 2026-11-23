@@ -76,13 +76,26 @@
     A.music.gain.value = 1;
     A.music.connect(A.master);
   }
+  const decodeQ = [];
+  let decoding = false;
+  function enqueueDecode(names) {
+    names.forEach(name => {
+      if (!name || A.buf[name] || decodeQ.indexOf(name) >= 0) return;
+      decodeQ.push(name);
+    });
+  }
+  function stepDecode() {
+    if (decoding || !decodeQ.length || !A.ctx) return;
+    decoding = true;
+    const name = decodeQ.shift();
+    fetchBuf(name).then(() => { decoding = false; }, () => { decoding = false; });
+  }
   function unlock() {
     ensure();
     if (!A.ctx) return;
     if (A.ctx.state !== 'running') A.ctx.resume().catch(() => {});
     A.unlocked = true;
-    const first = ['ui_confirm', 'portal_enter', 'sword_slash', 'music_calm_loop', 'ambience_well_loop', 'score_pickup', 'barrel_break', 'player_hit', 'tara_wake', 'meadow_ambience_loop', 'barrel_swing_1', 'wall_landing_1'];
-    (async () => { for (const name of first) await fetchBuf(name); })();
+    enqueueDecode(['ui_confirm', 'portal_enter', 'sword_slash', 'music_calm_loop', 'ambience_well_loop', 'score_pickup', 'barrel_break', 'player_hit', 'tara_wake', 'meadow_ambience_loop', 'barrel_swing_1', 'wall_landing_1']);
   }
   function fileOf(key) {
     const m = AUDIO_MAP[key];
@@ -189,7 +202,8 @@
   root.KWAudio = {
     MAP: AUDIO_MAP, unlock: unlock, play: play, loop: loop, setMusic: setMusic,
     duckMusic: duckMusic, setMuted: setMuted, creakOk: creakOk,
-    prefetch: function (names) { names.forEach(fetchBuf); },
+    prefetch: function (names) { enqueueDecode(names); },
+    stepDecode: stepDecode,
     setRng: function (fn) { A.rng = fn; },
     get unlocked() { return A.unlocked; },
     get muted() { return A.muted; }
