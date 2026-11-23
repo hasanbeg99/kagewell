@@ -450,6 +450,9 @@
     g.fill();
   }
   function shaft(g, w, h, pal) {
+    g.globalAlpha = 1;
+    g.fillStyle = pal.mid;
+    g.fillRect(0, 0, w, h);
     const rng = mulberry32(pal.sky.charCodeAt(1) * 97 + 13);
     const stones = [];
     for (let i = 0; i < 14; i++) {
@@ -458,7 +461,7 @@
         y: rng() * h,
         rw: 28 + rng() * 36,
         rh: 14 + rng() * 14,
-        a: 0.62 + rng() * 0.3
+        a: 0.85
       });
     }
     for (const dy of [0, -h]) {
@@ -748,7 +751,14 @@
       spark: bake(32, 32, (g, w, h) => glow(g, w, h, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0.2)')),
       ledge: bake(150, 36, ledge),
       sideShade: bake(72, 200, sideShade),
-      wallGlow: bake(160, 110, wallCone),
+      lanternLit: bake(150, 100, (g, w, h) => {
+        wallCone(g, w, h);
+        g.save();
+        g.translate(4, h * 0.28);
+        g.scale(0.7, 0.7);
+        lantern(g, 28, 44);
+        g.restore();
+      }),
       shadow: bake(128, 40, (g, w, h) => softOval(g, w, h, 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0)')),
       rim: bake(110, 42, (g, w, h) => softOval(g, w, h, 'rgba(159,216,255,0.95)', 'rgba(159,216,255,0)')),
       moonGlow: bake(180, 180, (g, w, h) => glow(g, w, h, 'rgba(159,216,255,0.55)', 'rgba(159,216,255,0.12)')),

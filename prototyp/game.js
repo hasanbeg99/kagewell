@@ -197,7 +197,14 @@
   const frameRing = new Float64Array(RING);
   const workRing = new Float64Array(RING);
   let ringI = 0, ringN = 0;
+  let runFrames = 0, runOver250 = 0, runMax = 0;
+  const dprChanges = [];
   let adaptSum = 0, adaptCount = 0, adaptT0 = 0, adaptSkip = 0;
+  function noteDpr(next) {
+    if (next === dprLimit) return;
+    dprChanges.push({ t: Math.round(performance.now()), from: dprLimit, to: next });
+    dprLimit = next;
+  }
   function armAdapt() {
     adaptSkip = performance.now() + 2000;
     adaptSum = 0;
@@ -1179,8 +1186,6 @@
       ctx.fillRect(C.wall, -2, W - C.wall * 2, visH + 8);
       ctx.restore();
     };
-    wash(biomeShown, 1);
-    if (name !== biomeShown && biomeBlend < 1) wash(name, 1 - biomeBlend);
     const far = art.bg[biomeShown] || art.bg.moon;
     const near = art.bg[name] || far;
     tile(far, 0.16, depth, C.wall, W - C.wall * 2);
@@ -1190,23 +1195,20 @@
       ctx.globalAlpha = 1;
     }
     if (art.ledge) {
-      const stepF = 260;
-      const f0 = (depth * 0.28 / stepF) | 0;
-      ctx.globalAlpha = 0.55;
-      for (let i = f0 - 1; i < f0 + 5; i++) {
-        const sy = i * stepF - depth * 0.28;
-        if (sy < -40 || sy > visH) continue;
-        ctx.drawImage(art.ledge, C.wall + 36 + ((i * 67) & 255) % 150, sy, 92, 22);
+      const stepF = 320;
+      const f0 = (depth * 0.22 / stepF) | 0;
+      for (let i = f0; i < f0 + 4; i++) {
+        const sy = i * stepF - depth * 0.22;
+        if (sy < -30 || sy > visH) continue;
+        ctx.drawImage(art.ledge, C.wall + 40 + ((i * 67) & 255) % 140, sy, 80, 18);
       }
-      const stepN = 190;
-      const n0 = (depth * 0.7 / stepN) | 0;
-      ctx.globalAlpha = 0.85;
-      for (let i = n0 - 1; i < n0 + 6; i++) {
-        const sy = i * stepN - depth * 0.7;
-        if (sy < -40 || sy > visH) continue;
-        ctx.drawImage(art.ledge, C.wall + 18 + ((i * 91) & 255) % 170, sy, 150, 34);
+      const stepN = 240;
+      const n0 = (depth * 0.72 / stepN) | 0;
+      for (let i = n0; i < n0 + 4; i++) {
+        const sy = i * stepN - depth * 0.72;
+        if (sy < -36 || sy > visH) continue;
+        ctx.drawImage(art.ledge, C.wall + 20 + ((i * 91) & 255) % 160, sy, 140, 32);
       }
-      ctx.globalAlpha = 1;
     }
     const wallImg = (art.walls && (art.walls[name] || art.walls.moon)) || null;
     const visWall = 50;
@@ -1256,25 +1258,22 @@
       if (sy < 30 || sy > visH - 20) continue;
       const left = i % 2 === 0;
       const lx = left ? 8 : W - 36;
-      const flick = 0.75 + 0.25 * Math.sin(performance.now() / 160 + i);
-      if (art.wallGlow) {
-        ctx.globalAlpha = flick;
-        if (left) ctx.drawImage(art.wallGlow, C.wall - 4, sy - 36, 168, 120);
+      const lit = art.lanternLit || art.wallGlow;
+      if (lit) {
+        if (left) ctx.drawImage(lit, C.wall - 2, sy - 30, 132, 88);
         else {
           ctx.save();
-          ctx.translate(W - C.wall + 4, 0);
+          ctx.translate(W - C.wall + 2, 0);
           ctx.scale(-1, 1);
-          ctx.drawImage(art.wallGlow, 0, sy - 36, 168, 120);
+          ctx.drawImage(lit, 0, sy - 30, 132, 88);
           ctx.restore();
         }
-        ctx.globalAlpha = 1;
-      }
-      if (art.lantern) ctx.drawImage(art.lantern, lx, sy, 26, 40);
+      } else if (art.lantern) ctx.drawImage(art.lantern, lx, sy, 26, 40);
     }
-    if (art.spark) {
-      for (let i = 0; i < dust.length; i++) {
+    if (art.spark && dust.length) {
+      ctx.globalAlpha = 0.4;
+      for (let i = 0; i < dust.length; i += 2) {
         const d = dust[i];
-        ctx.globalAlpha = 0.45;
         ctx.drawImage(art.spark, d.x, d.y, d.s * 4, d.s * 4);
       }
       ctx.globalAlpha = 1;
@@ -1405,7 +1404,60 @@
     ctx.stroke();
     ctx.restore();
   }
+  const foe = {};
+  function foeBlob(fill) {
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const g = c.getContext('2d');
+    g.translate(32, 32);
+    g.fillStyle = 'rgba(0,0,0,0.7)';
+    g.beginPath(); g.arc(1, 2, 24, 0, TAU); g.fill();
+    g.strokeStyle = '#EAF6FF';
+    g.lineWidth = 5;
+    g.beginPath(); g.arc(0, 0, 21, 0, TAU); g.stroke();
+    g.fillStyle = fill;
+    g.beginPath(); g.arc(0, 0, 18, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.28)';
+    g.beginPath(); g.ellipse(-5, -6, 8, 4, 0, 0, TAU); g.fill();
+    return c;
+  }
+  function foeBat() {
+    const c = document.createElement('canvas');
+    c.width = 120; c.height = 72;
+    const g = c.getContext('2d');
+    function wing(sign) {
+      g.beginPath();
+      g.moveTo(60 + sign * 4, 40);
+      g.quadraticCurveTo(60 + sign * 28, 14, 60 + sign * 52, 22);
+      g.quadraticCurveTo(60 + sign * 24, 40, 60 + sign * 4, 42);
+      g.closePath();
+    }
+    g.fillStyle = 'rgba(0,0,0,0.7)';
+    g.save(); g.translate(1, 2); wing(-1); g.fill(); wing(1); g.fill(); g.restore();
+    g.lineWidth = 4;
+    g.strokeStyle = '#EAF6FF';
+    g.lineJoin = 'round';
+    wing(-1); g.stroke(); g.fillStyle = '#3A3058'; g.fill();
+    wing(1); g.stroke(); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.65)';
+    g.beginPath(); g.ellipse(61, 44, 14, 11, 0, 0, TAU); g.fill();
+    g.strokeStyle = '#EAF6FF';
+    g.lineWidth = 3;
+    g.beginPath(); g.ellipse(60, 42, 12, 9, 0, 0, TAU); g.stroke();
+    g.fillStyle = '#A898C8';
+    g.fill();
+    g.fillStyle = '#FFE08A';
+    g.beginPath(); g.arc(55, 41, 2.4, 0, TAU); g.arc(65, 41, 2.4, 0, TAU); g.fill();
+    return c;
+  }
+  function bakeFoes() {
+    if (foe.a) return;
+    foe.a = foeBlob('#7E8AA4');
+    foe.b = foeBlob('#96A2BA');
+    foe.bat = foeBat();
+  }
   function drawCreep(e, alpha) {
+    bakeFoes();
     const ext = lerpA(e.pext || 0, e.ext || 0, alpha);
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
     const side = e.side < 0 ? -1 : 1;
@@ -1419,14 +1471,8 @@
       const x = lerpA(inner + side * 8, headX, t);
       const yy = y + Math.sin(t * Math.PI) * (-6 - wind * 0.4);
       const rad = 8 + t * 9;
-      ctx.beginPath();
-      ctx.arc(x, yy, rad, 0, TAU);
-      ctx.fillStyle = i % 2 ? '#353B4E' : '#4C556C';
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.14)';
-      ctx.beginPath();
-      ctx.ellipse(x - side * rad * 0.2, yy - rad * 0.35, rad * 0.45, rad * 0.22, 0, 0, TAU);
-      ctx.fill();
+      const spr = i % 2 ? foe.a : foe.b;
+      ctx.drawImage(spr, x - rad, yy - rad, rad * 2, rad * 2);
     }
     ctx.strokeStyle = '#232833';
     ctx.lineWidth = 2;
@@ -1460,31 +1506,11 @@
     }
   }
   function drawBat(e, alpha) {
+    bakeFoes();
     const x = lerpA(e.px0 == null ? e.x : e.px0, e.x, alpha);
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
     const flap = Math.sin(performance.now() / 70 + x * 0.02);
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.fillStyle = '#2A2144';
-    ctx.beginPath();
-    ctx.moveTo(-4, 0);
-    ctx.quadraticCurveTo(-28, -26 - flap * 16, -46, flap * 6);
-    ctx.quadraticCurveTo(-20, 6, -4, 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(4, 0);
-    ctx.quadraticCurveTo(28, -26 - flap * 16, 46, flap * 6);
-    ctx.quadraticCurveTo(20, 6, 4, 2);
-    ctx.fill();
-    ctx.fillStyle = '#3C2E62';
-    ctx.beginPath(); ctx.ellipse(0, 2, 10, 8, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    ctx.beginPath(); ctx.ellipse(-3, -1, 4, 2, -0.4, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#FFC23A';
-    ctx.beginPath(); ctx.arc(-3.5, 1, 2.1, 0, TAU); ctx.arc(3.5, 1, 2.1, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#1A1208';
-    ctx.beginPath(); ctx.arc(-3.2, 1.2, 0.9, 0, TAU); ctx.arc(3.8, 1.2, 0.9, 0, TAU); ctx.fill();
-    ctx.restore();
+    ctx.drawImage(foe.bat, x - 52, y - 28 + flap * 3, 104, 62);
   }
   function drawHazard(e, alpha) {
     const ext = lerpA(e.pext || 0, e.ext || 0, alpha);
@@ -2279,8 +2305,11 @@
       workRing[ringI] = performance.now() - t0;
       ringI = (ringI + 1) % RING;
       if (ringN < RING) ringN++;
+      runFrames++;
+      if (wallMs > runMax) runMax = wallMs;
+      if (wallMs > 250) runOver250++;
       const nowMs = performance.now();
-      if (playMs < 2000 || nowMs < adaptSkip || dprLimit <= CFG.dprMin) {
+      if (playMs < 2000 || nowMs < adaptSkip) {
         adaptSum = 0; adaptCount = 0; adaptT0 = 0;
       } else {
         if (!adaptT0) adaptT0 = nowMs;
@@ -2289,8 +2318,12 @@
         if (nowMs - adaptT0 >= 3000 && adaptCount >= 40) {
           const avg = adaptSum / adaptCount;
           adaptSum = 0; adaptCount = 0; adaptT0 = 0;
-          if (avg > 22) {
-            dprLimit = Math.max(CFG.dprMin, Math.round((dprLimit - 0.5) * 2) / 2);
+          const cap = Math.min(CFG.dprMax, rawDPR);
+          let next = dprLimit;
+          if (avg > 22 && dprLimit > CFG.dprMin) next = Math.max(CFG.dprMin, Math.round((dprLimit - 0.5) * 2) / 2);
+          else if (avg < 16 && dprLimit < cap) next = Math.min(cap, Math.round((dprLimit + 0.5) * 2) / 2);
+          if (next !== dprLimit) {
+            noteDpr(next);
             armAdapt();
             resize();
           }
@@ -2347,6 +2380,9 @@
         };
       },
       get frameTimes() { return copyRing(frameRing); },
+      get runStats() {
+        return { frames: runFrames, over250: runOver250, longest: runMax, dpr: dpr, dprLimit: dprLimit, dprChanges: dprChanges.slice() };
+      },
       get workTimes() { return copyRing(workRing); },
       get runCoins() { return runCoins; },
       get coinsN() { return coins.length; },
