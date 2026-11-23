@@ -1,7 +1,7 @@
 /* Kagewell prototyp — smooth vector well. 120 Hz step, interpolated render. */
 (function () {
   'use strict';
-  const CFG = { step: 1 / 120, maxFrameDt: 0.05, dprMax: 3, dprMin: 1.25 };
+  const CFG = { step: 1 / 120, maxFrameDt: 0.05, dprMax: 3, dprMin: 2 };
   const qs = new URLSearchParams(location.search);
   const NO_SPAWN = qs.get('noSpawn') === '1';
   const DEBUG = qs.get('debug') === '1';
@@ -1183,29 +1183,38 @@
     if (name !== biomeShown && biomeBlend < 1) wash(name, 1 - biomeBlend);
     const far = art.bg[biomeShown] || art.bg.moon;
     const near = art.bg[name] || far;
-    tile(far, 0.32, depth, C.wall, W - C.wall * 2);
+    tile(far, 0.16, depth, C.wall, W - C.wall * 2);
     if (near !== far && biomeBlend < 1) {
       ctx.globalAlpha = 1 - biomeBlend;
-      tile(near, 0.32, depth, C.wall, W - C.wall * 2);
+      tile(near, 0.16, depth, C.wall, W - C.wall * 2);
       ctx.globalAlpha = 1;
     }
-    if (art.mist) {
-      const stepM = 210;
-      const m0 = (depth * 0.5 / stepM) | 0;
-      ctx.globalAlpha = 0.8;
-      for (let i = m0 - 1; i < m0 + 6; i++) {
-        const sy = i * stepM - depth * 0.5;
-        if (sy < -50 || sy > visH) continue;
-        ctx.drawImage(art.mist, C.wall + 24 + ((i * 83) & 255) % 200, sy, 86, 40);
+    if (art.ledge) {
+      const stepF = 260;
+      const f0 = (depth * 0.28 / stepF) | 0;
+      ctx.globalAlpha = 0.55;
+      for (let i = f0 - 1; i < f0 + 5; i++) {
+        const sy = i * stepF - depth * 0.28;
+        if (sy < -40 || sy > visH) continue;
+        ctx.drawImage(art.ledge, C.wall + 36 + ((i * 67) & 255) % 150, sy, 92, 22);
+      }
+      const stepN = 190;
+      const n0 = (depth * 0.7 / stepN) | 0;
+      ctx.globalAlpha = 0.85;
+      for (let i = n0 - 1; i < n0 + 6; i++) {
+        const sy = i * stepN - depth * 0.7;
+        if (sy < -40 || sy > visH) continue;
+        ctx.drawImage(art.ledge, C.wall + 18 + ((i * 91) & 255) % 170, sy, 150, 34);
       }
       ctx.globalAlpha = 1;
     }
     const wallImg = (art.walls && (art.walls[name] || art.walls.moon)) || null;
-    tile(wallImg, 1, depth, 0, C.wall);
+    const visWall = 50;
+    tile(wallImg, 1, depth, 0, visWall);
     ctx.save();
     ctx.translate(W, 0);
     ctx.scale(-1, 1);
-    tile(wallImg, 1, depth, 0, C.wall);
+    tile(wallImg, 1, depth, 0, visWall);
     ctx.restore();
     ctx.strokeStyle = name === 'moss' ? 'rgba(150,190,120,0.55)' : name === 'ember' ? 'rgba(180,100,60,0.4)' : 'rgba(196,165,116,0.45)';
     ctx.lineWidth = 3;
@@ -1249,20 +1258,19 @@
       const lx = left ? 8 : W - 36;
       const flick = 0.75 + 0.25 * Math.sin(performance.now() / 160 + i);
       if (art.wallGlow) {
-        ctx.globalAlpha = 0.8 * flick;
-        if (left) ctx.drawImage(art.wallGlow, C.wall - 6, sy - 16, 100, 64);
+        ctx.globalAlpha = flick;
+        if (left) ctx.drawImage(art.wallGlow, C.wall - 4, sy - 36, 168, 120);
         else {
           ctx.save();
-          ctx.translate(W - C.wall + 6, 0);
+          ctx.translate(W - C.wall + 4, 0);
           ctx.scale(-1, 1);
-          ctx.drawImage(art.wallGlow, 0, sy - 16, 100, 64);
+          ctx.drawImage(art.wallGlow, 0, sy - 36, 168, 120);
           ctx.restore();
         }
         ctx.globalAlpha = 1;
       }
       if (art.lantern) ctx.drawImage(art.lantern, lx, sy, 26, 40);
     }
-    if (art.bottomFog) ctx.drawImage(art.bottomFog, 0, visH - 150, W, 150);
     if (art.spark) {
       for (let i = 0; i < dust.length; i++) {
         const d = dust[i];
@@ -1341,13 +1349,13 @@
     ctx.clip();
     if (art && art.shadow) {
       const lean = (x - W * 0.5) * 0.08;
-      ctx.globalAlpha = 0.5;
-      ctx.drawImage(art.shadow, x - 36 + lean, y + 14, 72, 22);
+      ctx.globalAlpha = 0.78;
+      ctx.drawImage(art.shadow, x - 8 + lean * 2.2, y + 26, 84, 30);
       ctx.globalAlpha = 1;
     }
     if (art && art.rim) {
-      ctx.globalAlpha = 0.38;
-      ctx.drawImage(art.rim, x - 32, y - 64, 64, 28);
+      ctx.globalAlpha = 0.8;
+      ctx.drawImage(art.rim, x - 42, y - 76, 84, 40);
       ctx.globalAlpha = 1;
     }
     const sq = barrel === 'intact' ? duckT / C.duckMs : 0;
@@ -1890,6 +1898,22 @@
     ctx.beginPath();
     ctx.ellipse(cx, mouthY, rx, ry + 5, 0, 0, TAU);
     ctx.stroke();
+    ctx.fillStyle = '#243040';
+    ctx.beginPath();
+    ctx.ellipse(cx, mouthY + 14, rx - 20, ry + 4, 0, 0, Math.PI);
+    ctx.fill();
+    const inner = ctx.createLinearGradient(cx - 40, mouthY, cx + 40, mouthY + 20);
+    inner.addColorStop(0, '#1A2430');
+    inner.addColorStop(0.5, '#3A4A5C');
+    inner.addColorStop(1, '#10161E');
+    ctx.fillStyle = inner;
+    ctx.beginPath();
+    ctx.ellipse(cx, mouthY + 8, rx - 26, ry - 2, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#070B10';
+    ctx.beginPath();
+    ctx.ellipse(cx, mouthY + 6, rx - 34, ry - 6, 0, 0, TAU);
+    ctx.fill();
   }
   function drawStoneWell(cx, ground, scale) {
     const s = scale || 1;
@@ -1901,8 +1925,17 @@
     }
     const mouthY = ground - 28;
     const beamTop = mouthY - 236;
-    ctx.fillStyle = '#6B4A30';
+    const postL = ctx.createLinearGradient(cx - 100, 0, cx - 80, 0);
+    postL.addColorStop(0, '#2A180C');
+    postL.addColorStop(0.42, '#C4925A');
+    postL.addColorStop(1, '#4A2A14');
+    ctx.fillStyle = postL;
     traceRound(cx - 96, beamTop, 14, mouthY + 10 - beamTop, 4); ctx.fill();
+    const postR = ctx.createLinearGradient(cx + 80, 0, cx + 100, 0);
+    postR.addColorStop(0, '#3A2010');
+    postR.addColorStop(0.5, '#E2B56A');
+    postR.addColorStop(1, '#2A160C');
+    ctx.fillStyle = postR;
     traceRound(cx + 82, beamTop, 14, mouthY + 10 - beamTop, 4); ctx.fill();
     const beam = ctx.createLinearGradient(cx - 110, beamTop, cx + 110, beamTop + 16);
     beam.addColorStop(0, '#6A3E1C');
@@ -1925,8 +1958,8 @@
     ctx.stroke();
     ctx.restore();
     if (art && art.shadow) {
-      ctx.globalAlpha = 0.4;
-      ctx.drawImage(art.shadow, cx - 70, mouthY + 18, 140, 28);
+      ctx.globalAlpha = 0.7;
+      ctx.drawImage(art.shadow, cx - 86, mouthY + 26, 172, 36);
       ctx.globalAlpha = 1;
     }
     drawWellRim(cx, mouthY);
@@ -1992,6 +2025,11 @@
     ctx.lineTo(W, visH + 30);
     ctx.lineTo(0, visH + 30);
     ctx.fill();
+    if (art && art.shadow) {
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(art.shadow, hutX - 6, ground - 10, 100, 24);
+      ctx.globalAlpha = 1;
+    }
     drawHut(hutX, ground - 36);
     const mouth = drawStoneWell(wellX, ground, wellScale);
     ctx.strokeStyle = 'rgba(255,255,255,0.28)';
@@ -2043,9 +2081,9 @@
     ctx.lineTo(barrelX, ropeY);
     ctx.stroke();
     if (art && art.shadow) {
-      ctx.globalAlpha = 0.4;
-      ctx.drawImage(art.shadow, barrelX - 28, barrelY + 22, 56, 16);
-      ctx.drawImage(art.shadow, mouth.x + 122 - 26, ground - 6, 52, 16);
+      ctx.globalAlpha = 0.62;
+      ctx.drawImage(art.shadow, barrelX - 30, barrelY + 26, 64, 18);
+      ctx.drawImage(art.shadow, mouth.x + 122 - 30, ground - 4, 64, 18);
       ctx.globalAlpha = 1;
     }
     drawChar('kiro-barrel-title', barrelX, barrelY, SPRITE_SCALE, 1);

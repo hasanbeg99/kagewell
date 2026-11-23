@@ -428,19 +428,25 @@
     g.beginPath(); g.arc(w * 0.32, h * 0.35, 3, 0.2, Math.PI - 0.25); g.stroke();
   }
   function stoneBlob(g, x, y, rw, rh, pal, alpha) {
-    const grd = g.createRadialGradient(x - rw * 0.35, y - rh * 0.4, rw * 0.08, x + rw * 0.1, y + rh * 0.1, Math.max(rw, rh));
-    grd.addColorStop(0, pal.stone);
-    grd.addColorStop(0.55, pal.stoneDim);
-    grd.addColorStop(1, pal.joint);
     g.globalAlpha = alpha;
-    g.fillStyle = grd;
+    const body = g.createLinearGradient(x, y - rh, x, y + rh);
+    body.addColorStop(0, '#F4F8FC');
+    body.addColorStop(0.22, pal.stone);
+    body.addColorStop(0.62, pal.stoneDim);
+    body.addColorStop(1, pal.deep);
+    g.fillStyle = body;
     g.beginPath();
     g.ellipse(x, y, rw, rh, 0, 0, TAU);
     g.fill();
-    g.globalAlpha = alpha * 0.4;
-    g.fillStyle = 'rgba(255,255,255,0.45)';
+    g.globalAlpha = alpha * 0.7;
+    g.fillStyle = 'rgba(0,0,0,0.55)';
     g.beginPath();
-    g.ellipse(x - rw * 0.28, y - rh * 0.28, rw * 0.28, rh * 0.18, -0.6, 0, TAU);
+    g.ellipse(x, y + rh * 0.28, rw * 0.92, rh * 0.55, 0, 0, Math.PI);
+    g.fill();
+    g.globalAlpha = alpha * 0.85;
+    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.beginPath();
+    g.ellipse(x - rw * 0.12, y - rh * 0.38, rw * 0.48, rh * 0.24, -0.25, 0, TAU);
     g.fill();
   }
   function shaft(g, w, h, pal) {
@@ -459,50 +465,93 @@
       for (const s of stones) stoneBlob(g, s.x, s.y + dy, s.rw, s.rh, pal, s.a);
     }
     const lit = g.createLinearGradient(0, 0, w, 0);
-    lit.addColorStop(0, 'rgba(0,0,0,0.28)');
-    lit.addColorStop(0.5, 'rgba(255,255,255,0.07)');
-    lit.addColorStop(1, 'rgba(0,0,0,0.28)');
+    lit.addColorStop(0, 'rgba(0,0,0,0.78)');
+    lit.addColorStop(0.12, 'rgba(0,0,0,0.34)');
+    lit.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+    lit.addColorStop(0.88, 'rgba(0,0,0,0.34)');
+    lit.addColorStop(1, 'rgba(0,0,0,0.78)');
     g.globalAlpha = 1;
     g.fillStyle = lit;
     g.fillRect(0, 0, w, h);
   }
   function wall(g, w, h, pal) {
-    const base = g.createLinearGradient(0, 0, w, 0);
-    base.addColorStop(0, pal.deep);
-    base.addColorStop(0.22, pal.joint);
-    base.addColorStop(0.62, pal.stoneDim);
-    base.addColorStop(0.86, pal.stone);
-    base.addColorStop(1, pal.joint);
-    g.fillStyle = base;
+    g.fillStyle = pal.deep;
     g.fillRect(0, 0, w, h);
-    const row = 36;
-    const rows = Math.round(h / row);
+    const row = 32;
+    const rows = Math.ceil(h / row) + 1;
     for (let r = 0; r < rows; r++) {
       const y = r * row;
-      const shift = (r % 2) * 12;
-      for (let x = -18 + shift; x < w; x += 26) {
-        const face = g.createLinearGradient(x, y + 3, x + 22, y + row - 4);
-        face.addColorStop(0, 'rgba(0,0,0,0.35)');
-        face.addColorStop(0.35, pal.stoneDim);
-        face.addColorStop(0.72, pal.stone);
-        face.addColorStop(1, 'rgba(255,255,255,0.22)');
+      const shift = (r % 2) * 16;
+      for (let x = -24 + shift; x < w - 10; x += 30) {
+        const face = g.createLinearGradient(x, y, x, y + row);
+        face.addColorStop(0, '#F7FBFF');
+        face.addColorStop(0.16, pal.stone);
+        face.addColorStop(0.55, pal.stoneDim);
+        face.addColorStop(1, '#0C1218');
         g.fillStyle = face;
-        pathRound(g, x, y + 3, 22, row - 8, 6);
+        pathRound(g, x + 2, y + 2, 26, row - 5, 8);
         g.fill();
-        g.fillStyle = 'rgba(0,0,0,0.38)';
-        g.fillRect(x + 1, y + row - 7, 20, 3);
+        g.fillStyle = 'rgba(255,255,255,0.45)';
+        g.fillRect(x + 6, y + 4, 16, 3);
+        g.fillStyle = 'rgba(0,0,0,0.55)';
+        g.fillRect(x + 4, y + row - 6, 20, 3);
       }
-      g.fillStyle = 'rgba(0,0,0,0.45)';
-      g.fillRect(0, y + row - 2, w, 2);
     }
-    const edge = g.createLinearGradient(0, 0, w, 0);
-    edge.addColorStop(0, 'rgba(0,0,0,0.45)');
-    edge.addColorStop(0.18, 'rgba(0,0,0,0)');
-    edge.addColorStop(0.72, 'rgba(255,255,255,0)');
-    edge.addColorStop(0.9, 'rgba(255,255,255,0.16)');
-    edge.addColorStop(1, 'rgba(0,0,0,0.55)');
-    g.fillStyle = edge;
+    const lip = g.createLinearGradient(w - 16, 0, w, 0);
+    lip.addColorStop(0, 'rgba(255,255,255,0.28)');
+    lip.addColorStop(0.35, pal.joint);
+    lip.addColorStop(1, 'rgba(0,0,0,0.82)');
+    g.fillStyle = lip;
+    g.beginPath();
+    g.moveTo(w - 14, 0);
+    g.lineTo(w - 2, 6);
+    g.lineTo(w - 2, h);
+    g.lineTo(w - 18, h);
+    g.closePath();
+    g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.5)';
+    g.fillRect(0, 0, 6, h);
+  }
+  function ledge(g, w, h) {
+    const top = g.createLinearGradient(0, 0, 0, h);
+    top.addColorStop(0, 'rgba(230,238,246,0.9)');
+    top.addColorStop(0.35, 'rgba(120,140,160,0.75)');
+    top.addColorStop(1, 'rgba(20,28,40,0.15)');
+    g.fillStyle = top;
+    g.beginPath();
+    g.ellipse(w / 2, h * 0.42, w * 0.46, h * 0.28, 0, 0, TAU);
+    g.fill();
+    g.fillStyle = 'rgba(6,10,16,0.55)';
+    g.beginPath();
+    g.ellipse(w / 2, h * 0.58, w * 0.4, h * 0.18, 0, 0, Math.PI);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.55)';
+    g.beginPath();
+    g.ellipse(w / 2, h * 0.3, w * 0.28, h * 0.08, 0, 0, TAU);
+    g.fill();
+  }
+  function sideShade(g, w, h) {
+    const s = g.createLinearGradient(0, 0, w, 0);
+    s.addColorStop(0, 'rgba(0,0,0,0.72)');
+    s.addColorStop(0.45, 'rgba(0,0,0,0.28)');
+    s.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = s;
     g.fillRect(0, 0, w, h);
+  }
+  function wallCone(g, w, h) {
+    const grd = g.createRadialGradient(6, h * 0.48, 2, 10, h * 0.48, w);
+    grd.addColorStop(0, 'rgba(255,214,120,0.95)');
+    grd.addColorStop(0.22, 'rgba(255,150,50,0.62)');
+    grd.addColorStop(0.55, 'rgba(255,110,30,0.22)');
+    grd.addColorStop(1, 'rgba(255,90,20,0)');
+    g.fillStyle = grd;
+    g.beginPath();
+    g.moveTo(0, h * 0.18);
+    g.quadraticCurveTo(w * 0.55, h * 0.05, w, 0);
+    g.lineTo(w, h);
+    g.quadraticCurveTo(w * 0.5, h * 0.92, 0, h * 0.78);
+    g.closePath();
+    g.fill();
   }
   function mist(g, w, h) {
     const rng = mulberry32(91);
@@ -689,7 +738,7 @@
     const bg = {}, walls = {};
     Object.keys(BIO).forEach(name => {
       bg[name] = bake(330, 360, (g, w, h) => shaft(g, w, h, BIO[name]));
-      walls[name] = bake(36, 180, (g, w, h) => wall(g, w, h, BIO[name]));
+      walls[name] = bake(52, 180, (g, w, h) => wall(g, w, h, BIO[name]));
     });
     return {
       bg: bg,
@@ -697,17 +746,11 @@
       coin: bake(64, 64, coin),
       glowWarm: bake(128, 128, (g, w, h) => glow(g, w, h, 'rgba(255,220,160,0.95)', 'rgba(255,160,60,0.28)')),
       spark: bake(32, 32, (g, w, h) => glow(g, w, h, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0.2)')),
-      mist: bake(80, 40, (g, w, h) => softOval(g, w, h, 'rgba(214,226,236,0.28)', 'rgba(214,226,236,0)')),
-      bottomFog: bake(390, 160, (g, w, h) => {
-        const bot = g.createLinearGradient(0, 0, 0, h);
-        bot.addColorStop(0, 'rgba(4,8,16,0)');
-        bot.addColorStop(1, 'rgba(4,8,16,0.4)');
-        g.fillStyle = bot;
-        g.fillRect(0, 0, w, h);
-      }),
-      wallGlow: bake(110, 72, (g, w, h) => softOval(g, w, h, 'rgba(255,176,80,0.6)', 'rgba(255,140,40,0)')),
-      shadow: bake(128, 40, (g, w, h) => softOval(g, w, h, 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0)')),
-      rim: bake(96, 36, (g, w, h) => softOval(g, w, h, 'rgba(159,216,255,0.7)', 'rgba(159,216,255,0)')),
+      ledge: bake(150, 36, ledge),
+      sideShade: bake(72, 200, sideShade),
+      wallGlow: bake(160, 110, wallCone),
+      shadow: bake(128, 40, (g, w, h) => softOval(g, w, h, 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0)')),
+      rim: bake(110, 42, (g, w, h) => softOval(g, w, h, 'rgba(159,216,255,0.95)', 'rgba(159,216,255,0)')),
       moonGlow: bake(180, 180, (g, w, h) => glow(g, w, h, 'rgba(159,216,255,0.55)', 'rgba(159,216,255,0.12)')),
       hillFog: bake(390, 220, (g, w, h) => {
         const fog = g.createLinearGradient(0, 0, 0, h);
