@@ -1,0 +1,82 @@
+{
+ "barrel_swing_1": {
+  "duration_s": 0.46,
+  "loop": false,
+  "volume": 0.65,
+  "lufs": -16.0,
+  "lufs_kind": "M",
+  "true_peak_dbtp": -3.8,
+  "loopEnd_s": null,
+  "desc": "Fass-Schwung Variante 1: holziger Whoosh, leichter Seilzug (kürzer)"
+ },
+ "barrel_swing_2": {
+  "duration_s": 0.52,
+  "loop": false,
+  "volume": 0.65,
+  "lufs": -16.0,
+  "lufs_kind": "M",
+  "true_peak_dbtp": -4.0,
+  "loopEnd_s": null,
+  "desc": "Fass-Schwung Variante 2: holziger Whoosh, leichter Seilzug"
+ },
+ "barrel_swing_3": {
+  "duration_s": 0.58,
+  "loop": false,
+  "volume": 0.65,
+  "lufs": -16.0,
+  "lufs_kind": "M",
+  "true_peak_dbtp": -3.56,
+  "loopEnd_s": null,
+  "desc": "Fass-Schwung Variante 3: holziger Whoosh, etwas mehr Seilzug (länger)"
+ },
+ "wall_landing_1": {
+  "duration_s": 0.38,
+  "loop": false,
+  "volume": 0.8,
+  "lufs": -16.0,
+  "lufs_kind": "M",
+  "true_peak_dbtp": -1.73,
+  "loopEnd_s": null,
+  "desc": "Mauer-Landung Variante 1: Holz auf Stein, kürzerer Steinhall"
+ },
+ "wall_landing_2": {
+  "duration_s": 0.46,
+  "loop": false,
+  "volume": 0.8,
+  "lufs": -16.9,
+  "lufs_kind": "M",
+  "true_peak_dbtp": -1.5,
+  "loopEnd_s": null,
+  "desc": "Mauer-Landung Variante 2: Holz auf Stein, etwas länger und dumpfer"
+ },
+ "tara_wake": {
+  "duration_s": 2.15,
+  "loop": false,
+  "volume": 0.75,
+  "lufs": -16.0,
+  "lufs_kind": "M",
+  "true_peak_dbtp": -3.26,
+  "loopEnd_s": null,
+  "desc": "Tara-Szene: Aufwach-Stinger, In-Skala auf D, Koto + Flöte + Glocke"
+ },
+ "meadow_ambience_loop": {
+  "duration_s": 24.0,
+  "loop": true,
+  "volume": 0.45,
+  "lufs": -24.0,
+  "lufs_kind": "I",
+  "true_peak_dbtp": -11.18,
+  "loopEnd_s": 24.0,
+  "desc": "Wiesen-Atmo (Tara-Szene): Wind im Gras, dezente Zirpen (24 s Loop, stereo)"
+ },
+ "portal_enter": {
+  "duration_s": 1.22,
+  "loop": false,
+  "volume": 0.75,
+  "lufs": -16.0,
+  "lufs_kind": "M",
+  "true_peak_dbtp": -5.39,
+  "loopEnd_s": null,
+  "desc": "Portal-Eintritt: mystischer Sog/Swell mit In-Skala-Obertonglitzern"
+ }
+}
