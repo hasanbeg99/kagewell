@@ -698,7 +698,8 @@
     bits = bits.filter(b => b.life > 0);
     scarfStep(dt);
     dustStep(dt);
-    ropeStep(dt, px, py + (sagMode === 'B' ? visSag : 0) + 10);
+    const harness = barrel === 'intact' ? py + BH / 2 - 64 : py + BH / 2 - 58;
+    ropeStep(dt, px, harness + (sagMode === 'B' ? visSag : 0));
     if (joyBack > 0 && joyFrom) {
       joyBack -= dt;
       const k = 1 - Math.max(0, joyBack) / 140;
@@ -740,7 +741,7 @@
   }
 
   function scarfStep(dt) {
-    const ax = px - 8, ay = py + BH / 2 - 28;
+    const ax = px - 30, ay = py + BH / 2 - 52;
     if (!scarf[0].y) { for (let i = 0; i < scarf.length; i++) { scarf[i].x = scarf[i].ox = ax - i * 4; scarf[i].y = scarf[i].oy = ay + i * 2; } }
     const rest = 5;
     for (let n = 0; n < 2; n++) {
@@ -867,7 +868,7 @@
     for (const e of ents) drawEnt(e);
     if (ghosts.length && art.kiro) {
       ctx.save(); ctx.globalAlpha = 0.28;
-      for (const g of ghosts) blit(art.kiro, g.x - 40, g.y + BH / 2 - 70, 80, 96);
+      for (const g of ghosts) blit(kiroImg || art.kiro, g.x - 40, g.y + BH / 2 - 70, 80, 96);
       ctx.restore();
     }
     for (const b of bits) {
@@ -906,7 +907,7 @@
   function drawPlayer() {
     const bob = sagMode === 'B' ? visSag : 0;
     if (barrel === 'broken' && invuln > 0 && ((invuln / 70) | 0) % 2 === 0) return;
-    const img = barrel === 'broken' ? (art.kiroLoose || art.kiro) : (art.kiro || kiroImg);
+    const img = barrel === 'broken' ? art.kiroLoose : (kiroImg || art.kiro);
     ctx.save();
     ctx.translate(Math.round(px), Math.round(py + BH / 2 + bob));
     if (impact > 0) ctx.scale(1 + impact * 0.08, 1 - impact * 0.1);
@@ -1043,15 +1044,17 @@
     }
   }
   function drawTitle() {
-    blit(art.title, 0, 0, W, Math.max(visH, 844));
+    ctx.fillStyle = '#142E22';
+    ctx.fillRect(0, 0, W, visH + 40);
+    ctx.drawImage(art.title, 0, 160, 390, 520, 0, 0, W, 620);
     const t = performance.now() / 1000;
     const grass = (t / 0.45 | 0) % 2;
     ctx.fillStyle = grass ? '#5DA856' : '#357845';
-    for (let i = 0; i < 18; i++) ctx.fillRect(16 + (i * 22) % 360, 620 + (i % 4) * 18, 2, 8);
+    for (let i = 0; i < 18; i++) ctx.fillRect(16 + (i * 22) % 360, 500 + (i % 4) * 16, 2, 8);
     const spin = art.portal[(t * 8 | 0) % 3];
-    blit(spin, 124, 360, 180, 160);
-    if (art.tara) blit(art.tara, 286, 430, 70, 104);
-    blit(art.kiro || kiroImg, 78, 448, 84, 100);
+    blit(spin, 150, 250, 170, 150);
+    if (art.tara) blit(art.tara, 236, 300, 86, 128);
+    blit(kiroImg || art.kiro, 70, 340, 88, 106);
     const pile = Math.min(14, totalCoins);
     for (let i = 0; i < pile; i++) blit(art.coin[(t * 6 + i | 0) % 4], 300 + (i % 5) * 14, 530 + ((i / 5) | 0) * 12, 18, 18);
     ctx.fillStyle = '#FFE2A8';
@@ -1075,29 +1078,35 @@
     text(bestD + ' m', camX + viewW - 96, yb + 10, fs, '#FFF8C4', 'center');
   }
   function drawFaint() {
-    if (faintT < 280) {
+    if (faintT < 220) {
       ctx.fillStyle = '#FFF8DC';
-      ctx.globalAlpha = 1 - faintT / 280;
+      ctx.globalAlpha = 1 - faintT / 220;
       ctx.fillRect(0, 0, W, visH + 40);
       ctx.globalAlpha = 1;
     }
-    blit(art.meadow || art.title, 0, 0, W, Math.max(visH, 844));
-    blit(art.taraLean || art.tara, 168, 430, 84, 126);
+    ctx.fillStyle = '#142E22';
+    ctx.fillRect(0, 0, W, viewH + 20);
+    ctx.drawImage(art.meadow || art.title, 0, 220, 390, 460, 0, 88, W, viewH - 230);
+    blit(art.taraLean || art.tara, 150, 390, 120, 170);
     const sit = faintT > 600;
-    if (sit) blit(art.kiroSit || art.kiro, 96, 478, 80, 70);
-    else blit(art.kiroLie || art.kiro, 70, 512, 120, 50);
+    if (sit) blit(art.kiroSit, 48, 470, 96, 86);
+    else blit(art.kiroLie, 24, 500, 150, 60);
     if (!sit) {
       ctx.strokeStyle = '#FFF8C4'; ctx.lineWidth = 2;
       const spin = faintT / 80;
-      ctx.beginPath(); ctx.arc(120, 500, 12, spin, spin + 1.4); ctx.stroke();
+      ctx.beginPath(); ctx.arc(90, 490, 14, spin, spin + 1.4); ctx.stroke();
     }
-    const shown = Math.min(runCoins, Math.floor(clamp((faintT - 200) / 1200, 0, 1) * Math.max(runCoins, 0)));
+    const shown = Math.min(runCoins, Math.ceil(clamp((faintT - 150) / 1050, 0, 1) * runCoins));
     if (shown > coinPop) { KWAudio.play('score_pickup', { semi: shown }); coinPop = shown; }
-    for (let i = 0; i < Math.min(shown, 18); i++) blit(art.coin[i % 4], 210 + (i % 6) * 16, 530 + ((i / 6) | 0) * 14, 16, 16);
+    const pile = runCoins <= 0 ? 0 : Math.max(3, Math.min(16, runCoins));
+    for (let i = 0; i < pile; i++) blit(art.coin[i % 4], 40 + (i % 4) * 22, 545 + ((i / 4) | 0) * 18, 26, 26);
+    const word = shown === 1 ? 'Münze' : 'Münzen';
     const fs = 13;
-    text('Du behältst ' + shown + ' Münzen', W / 2, viewH * 0.22, fs, '#FFF8C4', 'center');
-    text('Gesamt ' + totalCoins, W / 2, viewH * 0.22 + 18, fs, '#FFD84A', 'center');
-    text(Math.floor(depthM()) + ' m   ' + score + ' Pkt', W / 2, viewH * 0.22 + 36, fs, '#EAD19B', 'center');
+    const panel = { x: camX + 24, y: 16, w: viewW - 48, h: 78 };
+    roundRect(panel.x, panel.y, panel.w, panel.h, '#10152B', '#EAD19B');
+    text('Du behältst ' + shown + ' ' + word, W / 2, panel.y + 8, fs, '#FFF8C4', 'center');
+    text('Gesamt ' + totalCoins, W / 2, panel.y + 28, fs, '#FFD84A', 'center');
+    text(Math.floor(depthM()) + ' m   ' + score + ' Pkt', W / 2, panel.y + 48, fs, '#EAD19B', 'center');
     uiNoch = { x: camX + viewW / 2 - 110, y: viewH - 78, w: 220, h: 58 };
     uiTitel = { x: camX + viewW / 2 - 70, y: viewH - 132, w: 140, h: 40 };
     if (faintT >= C.faintButtonMs) {
@@ -1258,6 +1267,7 @@
         pickup = { x: px, worldY: depthPx + py + 4, t: 0 };
       },
       setBot: function (m) { bot = m; },
+      paint: function () { draw(); },
       sim: function (ms) {
         const n = Math.ceil(ms / 16.67);
         for (let i = 0; i < n; i++) { if (bot) botTick(); step(16.67); }

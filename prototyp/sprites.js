@@ -143,39 +143,56 @@
   }
   function kiroLoose() {
     const p = new Pix(52, 72);
-    p.ellipse(26, 14, 12, 11, PAL.skin1);
-    p.rect(16, 4, 20, 8, '#1A1028');
-    p.rect(18, 8, 16, 4, PAL.steel2);
-    p.rect(20, 14, 4, 3, PAL.out); p.rect(30, 14, 4, 3, PAL.out);
-    p.rect(14, 22, 24, 8, PAL.scarf1);
-    p.rect(6, 24, 12, 4, PAL.scarf2);
-    p.rect(18, 30, 16, 22, PAL.suit1);
-    p.rect(20, 32, 6, 16, PAL.suit2);
-    p.rect(16, 52, 8, 16, PAL.suit0);
-    p.rect(28, 52, 8, 16, PAL.suit0);
+    p.rect(22, 0, 8, 6, '#6E522B');
+    p.rect(16, 6, 20, 16, '#10152B');
+    p.rect(18, 8, 16, 6, '#2A3B73');
+    p.rect(20, 14, 4, 4, '#FFFFFF');
+    p.rect(30, 14, 4, 4, '#FFFFFF');
+    p.rect(21, 15, 2, 2, '#120A1E');
+    p.rect(31, 15, 2, 2, '#120A1E');
+    p.rect(18, 20, 16, 4, '#E2283C');
+    p.rect(6, 18, 14, 5, '#E2283C');
+    p.rect(2, 20, 8, 3, '#FF6673');
+    p.rect(14, 24, 24, 22, '#2A3B73');
+    p.rect(16, 26, 8, 14, '#7392D9');
+    p.rect(8, 28, 8, 6, '#10152B');
+    p.rect(36, 28, 8, 6, '#10152B');
+    p.rect(16, 46, 8, 20, '#10152B');
+    p.rect(28, 46, 8, 20, '#10152B');
+    p.rect(14, 64, 10, 6, '#2A2E38');
+    p.rect(28, 64, 10, 6, '#2A2E38');
     return done(p);
   }
   function kiroLie() {
-    const p = new Pix(96, 40);
-    p.ellipse(78, 14, 12, 11, PAL.skin1);
-    p.rect(68, 4, 18, 6, '#1A1028');
-    p.rect(74, 12, 4, 3, PAL.out);
-    p.rect(40, 16, 36, 14, PAL.suit1);
-    p.rect(44, 18, 10, 6, PAL.suit2);
-    p.rect(28, 18, 16, 6, PAL.scarf1);
-    p.rect(8, 22, 22, 8, PAL.suit0);
-    p.rect(4, 28, 10, 6, PAL.skin0);
+    const p = new Pix(108, 44);
+    p.rect(78, 6, 22, 16, '#10152B');
+    p.rect(80, 8, 16, 6, '#2A3B73');
+    p.rect(84, 14, 4, 4, '#FFFFFF');
+    p.rect(85, 15, 2, 2, '#120A1E');
+    p.rect(70, 16, 14, 5, '#E2283C');
+    p.rect(58, 18, 14, 3, '#FF6673');
+    p.rect(28, 16, 50, 14, '#2A3B73');
+    p.rect(36, 18, 12, 6, '#7392D9');
+    p.rect(8, 20, 22, 10, '#10152B');
+    p.rect(4, 28, 12, 6, '#2A2E38');
     return done(p);
   }
   function kiroSit() {
-    const p = new Pix(64, 56);
-    p.ellipse(40, 14, 13, 12, PAL.skin1);
-    p.rect(30, 4, 20, 7, '#1A1028');
-    p.rect(34, 12, 4, 3, PAL.out); p.rect(44, 12, 4, 3, PAL.out);
-    p.rect(22, 18, 18, 6, PAL.scarf1);
-    p.rect(28, 24, 22, 16, PAL.suit1);
-    p.rect(18, 38, 16, 8, PAL.suit0);
-    p.rect(36, 40, 18, 8, PAL.suit0);
+    const p = new Pix(72, 64);
+    p.rect(36, 2, 22, 16, '#10152B');
+    p.rect(38, 4, 16, 6, '#2A3B73');
+    p.rect(42, 10, 4, 4, '#FFFFFF');
+    p.rect(50, 10, 4, 4, '#FFFFFF');
+    p.rect(43, 11, 2, 2, '#120A1E');
+    p.rect(51, 11, 2, 2, '#120A1E');
+    p.rect(28, 14, 14, 5, '#E2283C');
+    p.rect(16, 16, 14, 3, '#FF6673');
+    p.rect(30, 20, 26, 18, '#2A3B73');
+    p.rect(34, 22, 8, 10, '#7392D9');
+    p.rect(22, 38, 18, 8, '#10152B');
+    p.rect(40, 40, 20, 8, '#10152B');
+    p.rect(20, 46, 10, 6, '#2A2E38');
+    p.rect(48, 48, 12, 6, '#2A2E38');
     return done(p);
   }
   function katanaIcon() {
