@@ -1,5 +1,5 @@
 /* Kagewell prototyp service worker. Scope is this folder only. Never deletes other games' caches. */
-const CACHE = 'kagewell-proto-v1';
+const CACHE = 'kagewell-proto-v2';
 const TIMEOUT = 3000;
 const SHELL = [
   './',
@@ -8,11 +8,6 @@ const SHELL = [
   './sprites.js',
   './audio.js',
   './sw.js',
-  './art/kiro-barrel.png',
-  '../vfx/vfx.js',
-  '../vfx/ninja-anim.js',
-  '../vfx/enemy-anim.js',
-  '../fonts/press-start-2p.woff',
   '../balance.json',
   '../audio/manifest.json'
 ];
