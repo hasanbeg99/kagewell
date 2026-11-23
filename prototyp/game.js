@@ -1087,15 +1087,10 @@
     ctx.fillStyle = '#142E22';
     ctx.fillRect(0, 0, W, viewH + 20);
     ctx.drawImage(art.meadow || art.title, 0, 220, 390, 460, 0, 88, W, viewH - 230);
-    blit(art.taraLean || art.tara, 150, 390, 120, 170);
+    blit(art.taraLean || art.tara, 200, 360, 120, 170);
     const sit = faintT > 600;
-    if (sit) blit(art.kiroSit, 48, 470, 96, 86);
-    else blit(art.kiroLie, 24, 500, 150, 60);
-    if (!sit) {
-      ctx.strokeStyle = '#FFF8C4'; ctx.lineWidth = 2;
-      const spin = faintT / 80;
-      ctx.beginPath(); ctx.arc(90, 490, 14, spin, spin + 1.4); ctx.stroke();
-    }
+    if (sit) blit(art.kiroSit, 24, 450);
+    else blit(art.kiroLie, 12, 470);
     const shown = Math.min(runCoins, Math.ceil(clamp((faintT - 150) / 1050, 0, 1) * runCoins));
     if (shown > coinPop) { KWAudio.play('score_pickup', { semi: shown }); coinPop = shown; }
     const pile = runCoins <= 0 ? 0 : Math.max(3, Math.min(16, runCoins));

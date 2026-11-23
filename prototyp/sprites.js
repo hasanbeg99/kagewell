@@ -163,36 +163,54 @@
     p.rect(28, 64, 10, 6, '#2A2E38');
     return done(p);
   }
+  function hoodHead(p, x, y, closed) {
+    p.rect(x, y, 36, 34, '#10152B');
+    p.rect(x + 4, y + 4, 28, 10, '#2A3B73');
+    p.rect(x + 6, y + 14, 24, 12, '#152448');
+    if (closed) {
+      p.rect(x + 7, y + 16, 9, 6, '#FFFFFF');
+      p.rect(x + 20, y + 16, 9, 6, '#FFFFFF');
+      p.rect(x + 7, y + 18, 9, 2, '#120A1E');
+      p.rect(x + 20, y + 18, 9, 2, '#120A1E');
+    } else {
+      p.rect(x + 8, y + 16, 8, 6, '#FFFFFF');
+      p.rect(x + 20, y + 16, 8, 6, '#FFFFFF');
+      p.rect(x + 11, y + 18, 3, 3, '#120A1E');
+      p.rect(x + 23, y + 18, 3, 3, '#120A1E');
+    }
+  }
   function kiroLie() {
-    const p = new Pix(108, 44);
-    p.rect(78, 6, 22, 16, '#10152B');
-    p.rect(80, 8, 16, 6, '#2A3B73');
-    p.rect(84, 14, 4, 4, '#FFFFFF');
-    p.rect(85, 15, 2, 2, '#120A1E');
-    p.rect(70, 16, 14, 5, '#E2283C');
-    p.rect(58, 18, 14, 3, '#FF6673');
-    p.rect(28, 16, 50, 14, '#2A3B73');
-    p.rect(36, 18, 12, 6, '#7392D9');
-    p.rect(8, 20, 22, 10, '#10152B');
-    p.rect(4, 28, 12, 6, '#2A2E38');
+    const p = new Pix(168, 96);
+    hoodHead(p, 6, 6, true);
+    p.rect(42, 36, 18, 8, '#E2283C');
+    p.rect(8, 62, 100, 10, '#E2283C');
+    p.rect(18, 72, 70, 8, '#FF6673');
+    p.rect(40, 78, 36, 6, '#E2283C');
+    p.rect(46, 28, 40, 20, '#2A3B73');
+    p.rect(52, 32, 14, 10, '#7392D9');
+    p.rect(48, 48, 26, 8, '#2A3B73');
+    p.rect(70, 52, 10, 8, '#10152B');
+    p.rect(86, 30, 28, 12, '#10152B');
+    p.rect(114, 26, 20, 12, '#10152B');
+    p.rect(84, 42, 14, 8, '#2A2E38');
+    p.rect(118, 36, 14, 8, '#2A2E38');
     return done(p);
   }
   function kiroSit() {
-    const p = new Pix(72, 64);
-    p.rect(36, 2, 22, 16, '#10152B');
-    p.rect(38, 4, 16, 6, '#2A3B73');
-    p.rect(42, 10, 4, 4, '#FFFFFF');
-    p.rect(50, 10, 4, 4, '#FFFFFF');
-    p.rect(43, 11, 2, 2, '#120A1E');
-    p.rect(51, 11, 2, 2, '#120A1E');
-    p.rect(28, 14, 14, 5, '#E2283C');
-    p.rect(16, 16, 14, 3, '#FF6673');
-    p.rect(30, 20, 26, 18, '#2A3B73');
-    p.rect(34, 22, 8, 10, '#7392D9');
-    p.rect(22, 38, 18, 8, '#10152B');
-    p.rect(40, 40, 20, 8, '#10152B');
-    p.rect(20, 46, 10, 6, '#2A2E38');
-    p.rect(48, 48, 12, 6, '#2A2E38');
+    const p = new Pix(96, 96);
+    p.rect(4, 78, 70, 10, '#E2283C');
+    p.rect(8, 86, 40, 6, '#FF6673');
+    hoodHead(p, 30, 2, false);
+    p.rect(18, 36, 18, 8, '#E2283C');
+    p.rect(8, 40, 16, 6, '#FF6673');
+    p.rect(28, 38, 40, 26, '#2A3B73');
+    p.rect(34, 42, 14, 16, '#7392D9');
+    p.rect(16, 46, 14, 8, '#10152B');
+    p.rect(66, 46, 14, 8, '#10152B');
+    p.rect(22, 62, 26, 12, '#10152B');
+    p.rect(46, 66, 30, 12, '#10152B');
+    p.rect(18, 72, 14, 8, '#2A2E38');
+    p.rect(64, 76, 16, 8, '#2A2E38');
     return done(p);
   }
   function katanaIcon() {
