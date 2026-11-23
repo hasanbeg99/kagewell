@@ -51,7 +51,12 @@
   let recoil = 0, impact = 0, pressed = false, runCoins = 0, totalCoins = 0, score = 0, bestD = 0, bestS = 0;
   let combo = 1, comboAt = -1e9, playerMoved = 0, unfair = false, caused = false, firstCreep = false, knotLock = 0;
   let waveT = 0, waveN = 1, waveOn = true, attackAt = 0, lastImpact = -1e9, lastPickupM = 0, pickupRoll = -1, pickup = null;
-  let coinChainAt = 0, nextCoinM = 0, creakSide = 0, ropeCd = 0, hitStop = 0;
+  let coinChainAt = 0, nextCoinM = 0, creakSide = 0, ropeCd = 0, hitStop = 0, breakFlash = 0;
+  let bits = [];
+  let uiNoch = null, uiTitel = null;
+  const scarf = [];
+  for (let i = 0; i < 8; i++) scarf.push({ x: 0, y: 0, ox: 0, oy: 0 });
+  const dust = [];
   let joyAnchor = null, joyKnob = { dx: 0, dy: 0 }, joyFrom = null, joyTo = null, joyBack = 0, joyId = null;
   let restX = 300, restY = 700, ringD = 128, knobD = 52, deadFrac = 0.12;
   let act = { x: 70, y: 760, d: 72, hit: 88 }, barrelBtn = { x: 160, y: 760, d: 58, show: false };
@@ -115,13 +120,16 @@
     knobD = 32 * Math.ceil(48 / (32 * cssPer));
     restX = right - edgeR - ringD / 2;
     restY = bottom - edgeB - ringD / 2;
-    act.d = Math.ceil(72 / cssPer);
-    act.hit = Math.ceil(88 / cssPer);
+    act.d = Math.ceil(90 / cssPer);
+    act.hit = Math.ceil(110 / cssPer);
     act.x = camX + edgeX + act.d / 2;
     act.y = bottom - edgeB - act.d / 2;
-    barrelBtn.d = Math.ceil(58 / cssPer);
-    barrelBtn.x = act.x + act.hit / 2 + Math.ceil(8 / cssPer) + barrelBtn.d / 2;
+    barrelBtn.d = Math.ceil(72 / cssPer);
+    barrelBtn.hit = Math.ceil(88 / cssPer);
+    const gapBtn = Math.ceil(28 / cssPer);
+    barrelBtn.x = act.x + act.d / 2 + gapBtn + barrelBtn.d / 2;
     barrelBtn.y = act.y;
+    if (barrelBtn.x + barrelBtn.d / 2 > restX - ringD / 2 - 8 / cssPer) barrelBtn.y = act.y - act.d / 2 - gapBtn - barrelBtn.d / 2;
     if (joyId == null && joyBack <= 0) joyAnchor = { x: restX, y: restY };
   }
 
@@ -169,10 +177,10 @@
     e.preventDefault();
     const p = logical(e);
     const hudBottom = L(86);
-    if (state === 'title' && hitRect(p, camX + viewW / 2 - 130, viewH * 0.68, 260, 70)) { beginRun(); return; }
+    if (state === 'title' && hitRect(p, camX + viewW / 2 - 130, viewH * 0.70, 260, 64)) { beginRun(); return; }
     if (state === 'faint') {
-      if (playMs >= 0 && faintAge() >= C.faintButtonMs && hitCircle(p, { x: act.x, y: act.y }, act.hit / 2)) { again(); return; }
-      if (faintAge() >= C.faintButtonMs && hitRect(p, W / 2 - L(70), viewH * 0.62, L(140), L(44))) { toTitle(); return; }
+      if (faintAge() >= C.faintButtonMs && uiNoch && hitRect(p, uiNoch.x, uiNoch.y, uiNoch.w, uiNoch.h)) { again(); return; }
+      if (faintAge() >= C.faintButtonMs && uiTitel && hitRect(p, uiTitel.x, uiTitel.y, uiTitel.w, uiTitel.h)) { toTitle(); return; }
       return;
     }
     if (state === 'pause') {
@@ -187,7 +195,7 @@
     if (hitCircle(p, { x: W - L(78), y: L(28) }, L(18))) { KWAudio.setMuted(!KWAudio.muted); KWAudio.play('ui_click'); return; }
     let role = 'none';
     const right = p.x >= W / 2 && p.y > hudBottom;
-    if (!right && barrelBtn.show && hitCircle(p, barrelBtn, barrelBtn.d / 2 + 2)) role = 'barrel';
+    if (!right && barrelBtn.show && hitCircle(p, barrelBtn, (barrelBtn.hit || barrelBtn.d) / 2)) role = 'barrel';
     else if (!right && hitCircle(p, act, act.hit / 2)) role = 'action';
     else if (right && joyId == null) role = 'joy';
     ptrs.set(e.pointerId, { role: role, x: p.x, y: p.y });
@@ -363,7 +371,12 @@
     if (src && src.harmless) return;
     if (barrel === 'intact' && !(src && src.force)) {
       barrel = 'broken'; invuln = C.breakInvuln;
-      if (vfx) vfx.barrelBreak(px, py + BH / 2, { hitStop: 60, shake: 6 });
+      breakFlash = 70;
+      bits = [];
+      for (let i = 0; i < 10; i++) bits.push({ x: px, y: py + 30, vx: Math.cos(i) * (80 + i * 12), vy: -40 - i * 18, a: i, wood: true, life: 900 });
+      bits.push({ x: px - 8, y: py + 24, vx: -90, vy: -80, a: 0, ring: true, life: 900 });
+      bits.push({ x: px + 8, y: py + 24, vx: 90, vy: -60, a: 1, ring: true, life: 900 });
+      if (vfx) vfx.barrelBreak(px, py + BH / 2, { hitStop: 60, shake: 4, vignette: 0 });
       KWAudio.play('barrel_break');
       combo = 1;
       return;
@@ -511,7 +524,7 @@
       firstCreep = true;
       spawnCreep(py + 10, px < W / 2 ? 1 : -1, true);
     }
-    if (playMs >= C.firstCoinAtMs && coinChainAt === 0) dropChain(px, py + 90, 4, true);
+    if (playMs >= C.firstCoinAtMs && coinChainAt === 0) { dropChain(W * 0.66, py - 10, 4, true); nextCoinM = Math.max(depthM() + 28, 28); }
     attackAt -= 0;
     const gap = Math.max(700, 1400 - 2 * m);
     const cap = (m >= 300 ? 4 : m >= 150 ? 3 : m >= 40 ? 2 : 1) + (waveN % 5 === 0 && waveOn ? 1 : 0);
@@ -534,7 +547,11 @@
       else if (k === 'seilschneider' && m >= 70 && !ents.some(e => e.kind === 'cutter' && e.alive) && playMs > knotLock) spawnCutter();
       attackAt = playMs;
     }
-    if (m >= nextCoinM) { dropChain(C.wall + 50 + rng() * (W - 2 * C.wall - 100), visH + 20, 3 + (rng() * 3 | 0), false); nextCoinM = m + 4; }
+    if (m >= nextCoinM) {
+      const n = 3 + ((rng() * 2) | 0);
+      dropChain(C.wall + 80 + rng() * (W - 2 * C.wall - 160), visH * 0.55, n, false);
+      nextCoinM = m + 28;
+    }
     if (!pickup && m >= lastPickupM + C.pickupGapM) {
       const step = Math.floor((m - (lastPickupM + C.pickupGapM)) / C.pickupEveryM);
       if (step > pickupRoll) {
@@ -548,7 +565,10 @@
   }
   function dropChain(x, screenY, n, teach) {
     coinChainAt++;
-    for (let i = 0; i < n; i++) coins.push({ x: x, worldY: depthPx + screenY + i * 28, t: 0, chain: coinChainAt, idx: i });
+    for (let i = 0; i < n; i++) {
+      const ox = Math.round((i - (n - 1) / 2) * 14);
+      coins.push({ x: x + ox, worldY: depthPx + screenY + i * 12, t: 0, chain: coinChainAt, idx: i });
+    }
     void teach;
   }
   function updateCoins(dt) {
@@ -673,6 +693,11 @@
     const tier = depthM() >= 300 ? 'music_fast' : depthM() >= 120 ? 'music_mid' : 'music_calm';
     KWAudio.setMusic(tier);
     tryAction();
+    breakFlash = Math.max(0, breakFlash - dt);
+    for (const b of bits) { b.x += b.vx * dt / 1000; b.y += b.vy * dt / 1000; b.vy += 400 * dt / 1000; b.a += dt * 0.01; b.life -= dt; }
+    bits = bits.filter(b => b.life > 0);
+    scarfStep(dt);
+    dustStep(dt);
     ropeStep(dt, px, py + (sagMode === 'B' ? visSag : 0) + 10);
     if (joyBack > 0 && joyFrom) {
       joyBack -= dt;
@@ -714,6 +739,36 @@
     if (threat && Math.abs(threat.x - px) < C.swordR && Math.abs(threat.y - py) < 90) { bufUntil = performance.now() + 120; tryAction(); }
   }
 
+  function scarfStep(dt) {
+    const ax = px - 8, ay = py + BH / 2 - 28;
+    if (!scarf[0].y) { for (let i = 0; i < scarf.length; i++) { scarf[i].x = scarf[i].ox = ax - i * 4; scarf[i].y = scarf[i].oy = ay + i * 2; } }
+    const rest = 5;
+    for (let n = 0; n < 2; n++) {
+      for (let i = 1; i < scarf.length; i++) {
+        const vx = (scarf[i].x - scarf[i].ox) * 0.9, vy = (scarf[i].y - scarf[i].oy) * 0.9;
+        scarf[i].ox = scarf[i].x; scarf[i].oy = scarf[i].y;
+        scarf[i].x += vx; scarf[i].y += vy + 12 * dt / 1000;
+      }
+      scarf[0].x = ax; scarf[0].y = ay;
+      for (let i = 0; i < scarf.length - 1; i++) {
+        const dx = scarf[i + 1].x - scarf[i].x, dy = scarf[i + 1].y - scarf[i].y;
+        const d = Math.hypot(dx, dy) || 1, diff = (d - rest) / d;
+        if (i) { scarf[i].x += dx * diff * 0.5; scarf[i].y += dy * diff * 0.5; }
+        scarf[i + 1].x -= dx * diff * 0.5; scarf[i + 1].y -= dy * diff * 0.5;
+      }
+    }
+  }
+  function dustStep(dt) {
+    if (state !== 'play' && state !== 'portal') return;
+    if (!dust.length) {
+      for (let i = 0; i < 28; i++) dust.push({ x: 40 + rng() * 300, y: rng() * visH, s: rng() < 0.6 ? 1 : 2, v: 10 + rng() * 18 });
+    }
+    for (const d of dust) {
+      d.y -= scrollV * 0.22 * dt / 1000;
+      d.x += Math.sin(d.y * 0.02) * dt * 0.01;
+      if (d.y < -6) { d.y = visH + 4; d.x = 50 + rng() * 280; }
+    }
+  }
   function blit(img, x, y, w, h) {
     if (!img) return;
     ctx.drawImage(img, Math.round(x), Math.round(y), w || img.width, h || img.height);
@@ -722,30 +777,109 @@
     const s = Math.floor(depthM() / 100) % 4;
     return ['moon', 'moss', 'ember', 'crystal'][s];
   }
+  function drawWell() {
+    const name = biomeName();
+    const back = (art.back && art.back[name]) || (art.back && art.back.moon);
+    if (back) {
+      const y0 = -((depthPx * 0.5) % back.height);
+      for (let y = y0; y < visH + back.height; y += back.height) blit(back, C.wall, y);
+    }
+    const kinds = [art.chain, art.root, art.drip, art.chain, art.root];
+    const band = 96;
+    const i0 = Math.floor(depthPx * 0.75 / band) - 1;
+    for (let i = i0; i < i0 + 14; i++) {
+      const spr = kinds[(i % 5 + 5) % 5];
+      if (!spr) continue;
+      const worldY = i * band;
+      const sy = worldY - depthPx * 0.75;
+      if (sy < -80 || sy > visH + 20) continue;
+      const left = i % 2 === 0;
+      blit(spr, left ? 40 : W - 54, sy);
+    }
+    const sides = (art.sides && art.sides[name]) || (art.sides && art.sides.moon);
+    if (sides && sides.length) {
+      const h = sides[0].height;
+      const y0 = -((depthPx) % (h * sides.length));
+      for (let y = y0; y < visH + h; y += h) {
+        const v = sides[(Math.floor((depthPx + y) / h) % sides.length + sides.length) % sides.length];
+        blit(v, 0, y);
+        ctx.save();
+        ctx.translate(W, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(v, 0, 0);
+        ctx.restore();
+      }
+    }
+    const beamWorld = Math.floor(depthPx / 1600) * 1600;
+    for (let b = beamWorld; b < depthPx + visH; b += 1600) {
+      if (b <= 0) continue;
+      const sy = b - depthPx;
+      if (sy > -12 && sy < visH) {
+        ctx.fillStyle = '#3D5875'; ctx.fillRect(C.wall, sy, W - C.wall * 2, 10);
+        ctx.fillStyle = '#120A1E'; ctx.fillRect(C.wall, sy + 8, W - C.wall * 2, 2);
+      }
+    }
+    if (art.cone && depthM() < 80) {
+      const rows = Math.round(220 * Math.max(0.25, 1 - depthM() / 80));
+      blit(art.cone, W / 2 - 70, 0, 140, rows);
+    }
+    const flick = (performance.now() / 120 | 0) % 3;
+    const step = 180;
+    const L0 = Math.floor(depthPx / step) - 1;
+    for (let i = L0; i < L0 + 8; i++) {
+      const sy = i * step - depthPx;
+      if (sy < 40 || sy > visH - 40) continue;
+      const left = i % 2 === 0;
+      const lx = left ? 18 : W - 34;
+      if (art.glow) {
+        ctx.save(); ctx.globalAlpha = 0.55; blit(art.glow[flick], lx - 24, sy - 28, 64, 64); ctx.restore();
+      }
+      blit(art.lantern, lx, sy);
+    }
+    ctx.fillStyle = '#C8E4FF';
+    for (const d of dust) ctx.fillRect(d.x | 0, d.y | 0, d.s, d.s);
+  }
   function drawWorld() {
-    const tile = art.tiles[biomeName()] || art.tiles.moon;
-    const y0 = -((depthPx * 0.5) % tile.height);
-    for (let y = y0; y < visH; y += tile.height) for (let x = 0; x < W; x += tile.width) blit(tile, x, y);
-    const side = art.side;
-    const ys = -((depthPx) % side.height);
-    for (let y = ys; y < visH; y += side.height) { blit(side, 0, y); blit(side, W - side.width, y); }
-    ctx.strokeStyle = '#C9A66B'; ctx.lineWidth = 4; ctx.lineCap = 'butt';
-    ctx.beginPath();
-    for (let i = 0; i <= SEG; i++) { const x = rx[i], y = ry[i]; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
-    ctx.stroke();
-    ctx.strokeStyle = '#EAD19B'; ctx.lineWidth = 2; ctx.stroke();
+    drawWell();
+    for (let i = 0; i < SEG; i++) {
+      const x0 = rx[i], y0 = ry[i], x1 = rx[i + 1], y1 = ry[i + 1];
+      const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      ctx.fillStyle = i % 2 ? '#6E522B' : '#9C7842';
+      ctx.fillRect(x0 - 1, y0 - 1, 3, 3);
+      ctx.fillStyle = i % 2 ? '#EAD19B' : '#C9A66B';
+      ctx.fillRect((x0 + nx * 2) | 0, (y0 + ny * 2) | 0, 2, 2);
+      ctx.fillRect((x0 - nx * 2) | 0, (y0 - ny * 2) | 0, 2, 2);
+    }
+    let coinShown = 0;
     for (const c of coins) {
+      if (coinShown >= 8) break;
       if (c.got && c.fly > 360) continue;
       const sy = c.got ? lerp(c.sy || 0, L(20), clamp(c.fly / 360, 0, 1)) : (c.worldY - depthPx);
       const sx = c.got ? lerp(c.x, W - L(50), clamp(c.fly / 360, 0, 1)) : c.x;
+      const inJoy = sx > restX - ringD / 2 - 8 && sy > restY - ringD / 2 - 8;
+      const inAct = Math.hypot(sx - act.x, sy - act.y) < act.d * 0.7;
+      if (inJoy || inAct) continue;
       blit(art.coin[(c.t / 120 | 0) % 4], sx - 16, sy - 16, 32, 32);
+      coinShown++;
     }
     if (pickup) blit(art.coin[0], pickup.x - 14, pickup.worldY - depthPx - 18, 28, 28);
     for (const e of ents) drawEnt(e);
-    if (ghosts.length && kiroImg) {
-      ctx.save(); ctx.globalAlpha = 0.4;
-      for (const g of ghosts) ctx.drawImage(kiroImg, Math.round(g.x - 40), Math.round(g.y - 70), 80, 96);
+    if (ghosts.length && art.kiro) {
+      ctx.save(); ctx.globalAlpha = 0.28;
+      for (const g of ghosts) blit(art.kiro, g.x - 40, g.y + BH / 2 - 70, 80, 96);
       ctx.restore();
+    }
+    for (const b of bits) {
+      if (b.ring) {
+        ctx.strokeStyle = '#B9C3D6'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(b.x, b.y, 10, b.a, b.a + Math.PI); ctx.stroke();
+      } else {
+        ctx.save(); ctx.translate(b.x | 0, b.y | 0); ctx.rotate(b.a);
+        ctx.fillStyle = (b.life / 80 | 0) % 2 ? '#8A5A2E' : '#E0A868';
+        ctx.fillRect(-2, -3, 4, 6);
+        ctx.restore();
+      }
     }
     drawPlayer();
     drawSword();
@@ -756,7 +890,7 @@
       const pose = e.state === 'windup' ? 1 : (e.state === 'lunge' || e.state === 'hold') ? 2 : 0;
       const spr = art.creep[pose][e.side < 0 ? 0 : 1];
       const x = e.side < 0 ? C.wall - 4 : W - C.wall - spr.width + 4;
-      blit(spr, e.alive ? x - e.side * e.ext * 0.2 : e.x, e.y - spr.height / 2);
+      blit(spr, e.alive ? x - e.side * e.ext * 0.15 : e.x, e.y - 26, 76, 52);
     } else if (e.kind === 'bat') {
       const spr = art.bat[(e.t / 120 | 0) % 3][e.x < px ? 0 : 1];
       blit(spr, e.x - spr.width / 2, e.y - spr.height / 2);
@@ -771,36 +905,76 @@
   }
   function drawPlayer() {
     const bob = sagMode === 'B' ? visSag : 0;
-    const img = kiroImg || art.kiroHead;
+    if (barrel === 'broken' && invuln > 0 && ((invuln / 70) | 0) % 2 === 0) return;
+    const img = barrel === 'broken' ? (art.kiroLoose || art.kiro) : (art.kiro || kiroImg);
     ctx.save();
     ctx.translate(Math.round(px), Math.round(py + BH / 2 + bob));
-    if (impact > 0) ctx.scale(1 + impact * 0.1, 1 - impact * 0.15);
+    if (impact > 0) ctx.scale(1 + impact * 0.08, 1 - impact * 0.1);
     if (swingPhase === 'fly') ctx.rotate(swingDir * swingU * TAU);
     else if (duckT > 0 && barrel === 'intact') ctx.rotate((atLeft() ? 1 : -1) * (3 * Math.PI / 180) * (duckT / C.duckMs));
-    if (barrel === 'broken') {
-      ctx.drawImage(img, 0, 0, img.width, Math.round(img.height * 0.48), -26, -56, 52, 50);
-    } else {
-      ctx.drawImage(img, -40, -70, 80, 96);
+    if (barrel === 'broken') blit(img, -26, -56, 52, 72);
+    else blit(img, -40, -70, 80, 96);
+    if (breakFlash > 40) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(-18, -20, 36, 28);
     }
     ctx.restore();
+    if (barrel === 'intact' && !swingPhase) {
+      ctx.fillStyle = '#E2283C';
+      for (let i = 0; i < scarf.length; i++) {
+        const s = 4 - (i > 4 ? 2 : 0);
+        ctx.fillRect(scarf[i].x | 0, scarf[i].y | 0, s, 3);
+      }
+      ctx.fillStyle = '#FF6673';
+      ctx.fillRect(scarf[scarf.length - 1].x | 0, scarf[scarf.length - 1].y | 0, 3, 3);
+    }
   }
   function drawSword() {
-    if (!slashPhase && slashCd > 200) return;
     if (!slashPhase) return;
-    const u = slashPhase === 'windup' ? 0 : slashPhase === 'active' ? clamp(slashT / C.swordSweepMs, 0, 1) : 1;
-    const ang = (slashPhase === 'windup' ? -105 : -90 + 90 * ease(u)) * Math.PI / 180 * slashDir - (slashDir < 0 ? Math.PI : 0);
+    const u = slashPhase === 'windup' ? 0.08 : slashPhase === 'active' ? clamp(slashT / C.swordSweepMs, 0, 1) : 1;
+    const sweep = ease(u);
     const a0 = slashDir > 0 ? -Math.PI / 2 : -Math.PI;
-    const a1 = slashDir > 0 ? (-Math.PI / 2 + (Math.PI / 2) * ease(u)) : (-Math.PI / 2 - (Math.PI / 2) * ease(u));
-    const cx = px, cy = py - 0.18 * BH;
-    ctx.save();
-    ctx.strokeStyle = '#4FF0FF'; ctx.lineWidth = 8; ctx.lineCap = 'butt';
-    ctx.beginPath(); ctx.arc(cx, cy, 76, Math.min(a0, a1), Math.max(a0, a1)); ctx.stroke();
-    ctx.strokeStyle = '#EEF4FF'; ctx.lineWidth = 3; ctx.stroke();
-    const tip = slashPhase === 'windup' ? a0 : a1;
+    const a1 = slashDir > 0 ? -Math.PI / 2 + (Math.PI / 2) * sweep : -Math.PI / 2 - (Math.PI / 2) * sweep;
+    const cx = px, cy = py - 0.18 * BH, rad = 72;
+    const lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+    const cols = ['#1CA8D9', '#4FF0FF', '#9AF7FF', '#FFFFFF'];
+    for (let i = 0; i < 36; i++) {
+      const a = lo + (hi - lo) * (i / 35);
+      for (let band = 0; band < 3; band++) {
+        const rr = rad - 8 + band * 6;
+        ctx.fillStyle = cols[Math.min(3, band + ((i / 12) | 0))];
+        ctx.fillRect(cx + Math.cos(a) * rr - 3, cy + Math.sin(a) * rr - 3, 7, 7);
+      }
+    }
+    const tip = a1;
+    ctx.fillStyle = '#EEF4FF';
+    for (let t = 0; t < 34; t += 3) {
+      const k = t / 34;
+      ctx.fillRect(cx + Math.cos(tip) * (16 + t) - 2, cy + Math.sin(tip) * (16 + t) - 2, 4, 4);
+      if (k > 0.7) { ctx.fillStyle = '#FFFFFF'; }
+    }
     ctx.fillStyle = '#E0A868';
-    ctx.fillRect(cx + Math.cos(tip) * 16 - 3, cy + Math.sin(tip) * 16 - 3, 8, 8);
-    ctx.restore();
-    void ang;
+    ctx.fillRect(cx + Math.cos(tip) * 10 - 4, cy + Math.sin(tip) * 10 - 3, 8, 6);
+  }
+  function fillDisc(cx, cy, r, fill, stroke) {
+    const R = Math.max(2, r | 0);
+    ctx.fillStyle = fill;
+    for (let y = -R; y <= R; y++) {
+      const w = Math.round(Math.sqrt(Math.max(0, R * R - y * y)));
+      ctx.fillRect((cx | 0) - w, (cy | 0) + y, w * 2 + 1, 1);
+    }
+    if (stroke) {
+      ctx.fillStyle = stroke;
+      const r0 = Math.max(1, R - 4);
+      for (let y = -R; y <= R; y++) {
+        const outer = Math.round(Math.sqrt(Math.max(0, R * R - y * y)));
+        const inner = Math.round(Math.sqrt(Math.max(0, r0 * r0 - y * y)));
+        if (outer > inner) {
+          ctx.fillRect((cx | 0) - outer, (cy | 0) + y, outer - inner, 1);
+          ctx.fillRect((cx | 0) + inner, (cy | 0) + y, outer - inner, 1);
+        }
+      }
+    }
   }
   function roundRect(x, y, w, h, fill, stroke) {
     ctx.fillStyle = fill; ctx.fillRect(x | 0, y | 0, w | 0, h | 0);
@@ -817,37 +991,46 @@
     const top = (8 + insets().t) / cssPer;
     const left = camX + 8 / cssPer;
     const fs = Math.max(16 / cssPer, 16);
-    roundRect(left, top, 120 / cssPer, fs + 8, '#0B1426', '#FFD84A');
-    blit(art.coin[0], left + 4, top + 2, fs, fs);
-    text(String(runCoins), left + fs + 8, top + 4, fs * 0.8, '#FFD84A');
+    roundRect(left, top, 132 / cssPer, fs + 10, '#0B1426', '#FFD84A');
+    blit(art.coin[0], left + 4, top + 2, fs + 4, fs + 4);
+    text(String(runCoins), left + fs + 12, top + 6, fs * 0.85, '#FFD84A');
     const spCol = spares > 0 ? '#E0A868' : '#7B8494';
-    roundRect(left, top + fs + 14, 100 / cssPer, fs + 8, '#0B1426', spCol);
-    text('F ' + spares, left + 6, top + fs + 18, fs * 0.8, spCol);
-    text(Math.floor(depthM()) + ' m', camX + viewW / 2, top + 4, fs * 0.85, '#FFF8C4', 'center');
-    const pr = camX + viewW - 48 / cssPer;
-    roundRect(pr, top, 40 / cssPer, 32 / cssPer, '#0B1426', '#FFF8C4');
-    text('II', pr + 8 / cssPer, top + 6, fs * 0.7, '#FFF8C4');
-    roundRect(pr - 48 / cssPer, top, 40 / cssPer, 32 / cssPer, '#0B1426', KWAudio.muted ? '#7B8494' : '#FFF8C4');
-    text(KWAudio.muted ? 'x' : 'T', pr - 36 / cssPer, top + 6, fs * 0.7, '#FFF8C4');
+    roundRect(left, top + fs + 16, 108 / cssPer, fs + 10, '#0B1426', spCol);
+    blit(art.barrelIcon, left + 4, top + fs + 16, 22, 26);
+    text('x' + spares, left + fs + 12, top + fs + 22, fs * 0.8, spCol);
+    const dw = 148 / cssPer;
+    roundRect(camX + viewW / 2 - dw / 2, top, dw, fs + 12, '#10152B', '#EAD19B');
+    text(Math.floor(depthM()) + ' m', camX + viewW / 2, top + 2, Math.max(20 / cssPer, 20), '#F4F1EA', 'center');
+    const pr = camX + viewW - 44 / cssPer;
+    roundRect(pr, top, 36 / cssPer, 36 / cssPer, '#0B1426', '#FFF8C4');
+    ctx.fillStyle = '#FFF8C4';
+    ctx.fillRect(pr + 12 / cssPer, top + 8 / cssPer, 4 / cssPer, 20 / cssPer);
+    ctx.fillRect(pr + 20 / cssPer, top + 8 / cssPer, 4 / cssPer, 20 / cssPer);
+    roundRect(pr - 44 / cssPer, top, 36 / cssPer, 36 / cssPer, '#0B1426', KWAudio.muted ? '#7B8494' : '#FFF8C4');
+    blit(KWAudio.muted ? art.speakerOff : art.speaker, pr - 40 / cssPer, top + 6 / cssPer, 24 / cssPer, 24 / cssPer);
   }
   function drawControls() {
     if (state !== 'play' && state !== 'portal' && state !== 'pause') return;
     const a = joyAnchor || { x: restX, y: restY };
     blit(art.joyRing, a.x - ringD / 2, a.y - ringD / 2, ringD, ringD);
+    const notch = (dx, dy, on) => {
+      ctx.fillStyle = on ? '#4FF0FF' : '#63708F';
+      ctx.fillRect(a.x + dx - 3, a.y + dy - 3, 6, 6);
+    };
+    const Rnotch = ringD / 2 - 8;
+    notch(0, -Rnotch, stickDir === 'up');
+    notch(0, Rnotch, stickDir === 'down');
+    notch(-Rnotch, 0, stickDir === 'left');
+    notch(Rnotch, 0, stickDir === 'right');
+    ctx.fillStyle = '#7B8494';
+    ctx.fillRect(a.x + joyKnob.dx - 3, a.y - 8, 6, joyKnob.dy + 8);
     blit(art.joyKnob, a.x + joyKnob.dx - knobD / 2, a.y + joyKnob.dy - knobD / 2, knobD, knobD);
     const icon = predict();
-    roundRect(act.x - act.d / 2, act.y - act.d / 2, act.d, act.d, pressed ? '#243056' : '#10152B', '#EAD19B');
-    ctx.save();
-    ctx.translate(act.x, act.y);
-    if (icon === 'swing') {
-      ctx.fillStyle = '#8A5A2E'; ctx.fillRect(-12, -16, 24, 32);
-      ctx.fillStyle = '#EEF4FF'; ctx.fillRect(-12, -16, 24, 4); ctx.fillRect(-12, 8, 24, 4);
-    } else {
-      ctx.strokeStyle = '#4FF0FF'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(-8, 10); ctx.lineTo(12, -12); ctx.stroke();
-      ctx.fillStyle = '#E0A868'; ctx.fillRect(-14, 6, 10, 8);
-    }
-    ctx.restore();
+    const swingReady = icon === 'swing';
+    const press = pressed ? 3 : 0;
+    fillDisc(act.x, act.y + press, act.d / 2, pressed ? '#243056' : (swingReady ? '#5A3518' : '#19223B'), swingReady ? '#FFD84A' : '#D8E4EE');
+    const ic = swingReady ? art.barrelIcon : art.katana;
+    blit(ic, act.x - 16, act.y - 16 + press, 32, 32);
     if (atWall() && swingCd > 0 && barrel === 'intact') {
       ctx.strokeStyle = '#4FF0FF'; ctx.lineWidth = 4;
       ctx.beginPath();
@@ -855,56 +1038,73 @@
       ctx.stroke();
     }
     if (barrelBtn.show) {
-      roundRect(barrelBtn.x - barrelBtn.d / 2, barrelBtn.y - barrelBtn.d / 2, barrelBtn.d, barrelBtn.d, '#3A1E10', '#FFD84A');
-      ctx.fillStyle = '#E0A868';
-      ctx.fillRect(barrelBtn.x - 12, barrelBtn.y - 14, 24, 28);
+      fillDisc(barrelBtn.x, barrelBtn.y, barrelBtn.d / 2, '#3A1E10', '#FFD84A');
+      blit(art.barrelIcon, barrelBtn.x - 14, barrelBtn.y - 16, 28, 32);
     }
   }
   function drawTitle() {
     blit(art.title, 0, 0, W, Math.max(visH, 844));
     const t = performance.now() / 1000;
-    blit(art.portal[(t * 8 | 0) % 3], 156, 488, 110, 78);
-    if (art.tara) blit(art.tara, 248, 455, 90, 135);
-    if (kiroImg) blit(kiroImg, 118, 470, 110, 132);
-    const pile = Math.min(16, totalCoins);
-    for (let i = 0; i < pile; i++) blit(art.coin[(t * 4 + i | 0) % 4], 300 + (i % 4) * 16, 560 + ((i / 4) | 0) * 14, 20, 20);
+    const grass = (t / 0.45 | 0) % 2;
+    ctx.fillStyle = grass ? '#5DA856' : '#357845';
+    for (let i = 0; i < 18; i++) ctx.fillRect(16 + (i * 22) % 360, 620 + (i % 4) * 18, 2, 8);
+    const spin = art.portal[(t * 8 | 0) % 3];
+    blit(spin, 124, 360, 180, 160);
+    if (art.tara) blit(art.tara, 286, 430, 70, 104);
+    blit(art.kiro || kiroImg, 78, 448, 84, 100);
+    const pile = Math.min(14, totalCoins);
+    for (let i = 0; i < pile; i++) blit(art.coin[(t * 6 + i | 0) % 4], 300 + (i % 5) * 14, 530 + ((i / 5) | 0) * 12, 18, 18);
     ctx.fillStyle = '#FFE2A8';
     for (let i = 0; i < 14; i++) {
-      const fx = (30 + i * 27 + Math.sin(t * 0.6 + i) * 16) % 380;
-      const fy = 400 + (i * 19) % 160 + Math.sin(t * 1.3 + i) * 8;
+      const fx = (24 + i * 28 + Math.sin(t * 0.7 + i) * 14) % 370;
+      const fy = 360 + (i * 23) % 180 + Math.sin(t * 1.2 + i) * 6;
       const s = i % 2 ? 4 : 2;
       ctx.fillRect(fx | 0, fy | 0, s, s);
     }
-    text('KAGEWELL', W / 2, L(28), 28, '#FFF8C4', 'center');
-    text('Barrel Ninja', W / 2, L(64), 12, '#FFD84A', 'center');
-    const by = viewH * 0.68;
+    text('KAGEWELL', W / 2, 16, 40, '#E5B84B', 'center');
+    text('Barrel Ninja', W / 2, 62, 12, '#4FF0FF', 'center');
+    const by = viewH * 0.70;
     roundRect(camX + viewW / 2 - 120, by, 240, 56, '#10152B', '#4FF0FF');
     text('SPIELEN', camX + viewW / 2, by + 18, 16, '#4FF0FF', 'center');
-    const fs = Math.max(16 / cssPer, 16);
-    text(String(totalCoins), camX + 16, viewH - 36, fs, '#FFD84A');
-    text(bestD + ' m', camX + viewW - 16, viewH - 36, fs, '#FFF8C4', 'right');
+    const fs = 14;
+    const yb = by + 68;
+    roundRect(camX + 12, yb, 170, 36, '#10152B', '#FFD84A');
+    blit(art.coin[0], camX + 18, yb + 4, 26, 26);
+    text('x ' + totalCoins, camX + 50, yb + 10, fs, '#FFD84A');
+    roundRect(camX + viewW - 182, yb, 170, 36, '#10152B', '#EAD19B');
+    text(bestD + ' m', camX + viewW - 96, yb + 10, fs, '#FFF8C4', 'center');
   }
   function drawFaint() {
-    const k = clamp(faintT / 500, 0, 1);
-    ctx.fillStyle = 'rgba(255,248,220,' + (0.85 * ease(Math.min(1, faintT / 280))) + ')';
-    ctx.fillRect(0, 0, W, visH + 40);
-    if (k > 0.35) blit(art.meadow, 0, 0, W, Math.max(visH, 844));
-    const sit = faintT > 600 ? 1 : 0;
-    if (art.taraLean) blit(art.taraLean, 200, viewH * 0.36, 96, 140);
-    if (kiroImg) blit(kiroImg, 100, viewH * (sit ? 0.42 : 0.46), 100, 120);
+    if (faintT < 280) {
+      ctx.fillStyle = '#FFF8DC';
+      ctx.globalAlpha = 1 - faintT / 280;
+      ctx.fillRect(0, 0, W, visH + 40);
+      ctx.globalAlpha = 1;
+    }
+    blit(art.meadow || art.title, 0, 0, W, Math.max(visH, 844));
+    blit(art.taraLean || art.tara, 168, 430, 84, 126);
+    const sit = faintT > 600;
+    if (sit) blit(art.kiroSit || art.kiro, 96, 478, 80, 70);
+    else blit(art.kiroLie || art.kiro, 70, 512, 120, 50);
+    if (!sit) {
+      ctx.strokeStyle = '#FFF8C4'; ctx.lineWidth = 2;
+      const spin = faintT / 80;
+      ctx.beginPath(); ctx.arc(120, 500, 12, spin, spin + 1.4); ctx.stroke();
+    }
     const shown = Math.min(runCoins, Math.floor(clamp((faintT - 200) / 1200, 0, 1) * Math.max(runCoins, 0)));
     if (shown > coinPop) { KWAudio.play('score_pickup', { semi: shown }); coinPop = shown; }
-    for (let i = 0; i < Math.min(shown, 16); i++) blit(art.coin[i % 4], 250 + (i % 6) * 18, viewH * 0.52 + ((i / 6) | 0) * 16, 18, 18);
-    const fs = Math.max(L(13), 13);
-    text('Du behältst ' + shown + ' Münzen', W / 2, viewH * 0.22, fs, '#10152B', 'center');
-    text('Gesamt ' + totalCoins, W / 2, viewH * 0.22 + fs + 6, fs, '#3A1E10', 'center');
-    text(Math.floor(depthM()) + ' m', W / 2, viewH * 0.22 + fs * 2 + 12, fs, '#10152B', 'center');
-    text(score + ' Pkt', W / 2, viewH * 0.22 + fs * 3 + 18, fs, '#10152B', 'center');
+    for (let i = 0; i < Math.min(shown, 18); i++) blit(art.coin[i % 4], 210 + (i % 6) * 16, 530 + ((i / 6) | 0) * 14, 16, 16);
+    const fs = 13;
+    text('Du behältst ' + shown + ' Münzen', W / 2, viewH * 0.22, fs, '#FFF8C4', 'center');
+    text('Gesamt ' + totalCoins, W / 2, viewH * 0.22 + 18, fs, '#FFD84A', 'center');
+    text(Math.floor(depthM()) + ' m   ' + score + ' Pkt', W / 2, viewH * 0.22 + 36, fs, '#EAD19B', 'center');
+    uiNoch = { x: camX + viewW / 2 - 110, y: viewH - 78, w: 220, h: 58 };
+    uiTitel = { x: camX + viewW / 2 - 70, y: viewH - 132, w: 140, h: 40 };
     if (faintT >= C.faintButtonMs) {
-      roundRect(act.x - act.d / 2, act.y - act.d / 2, act.d, act.d, '#7E1122', '#FFF8C4');
-      text('Nochmal', act.x, act.y - fs / 2, Math.max(10, fs * 0.7), '#FFF8C4', 'center');
-      roundRect(W / 2 - L(70), viewH * 0.62, L(140), L(40), '#10152B', '#FFF8C4');
-      text('Titel', W / 2, viewH * 0.62 + L(10), fs, '#FFF8C4', 'center');
+      roundRect(uiNoch.x, uiNoch.y, uiNoch.w, uiNoch.h, '#7E1122', '#FFF8C4');
+      text('Nochmal', uiNoch.x + uiNoch.w / 2, uiNoch.y + 16, 14, '#FFF8C4', 'center');
+      roundRect(uiTitel.x, uiTitel.y, uiTitel.w, uiTitel.h, '#10152B', '#FFF8C4');
+      text('Titel', uiTitel.x + uiTitel.w / 2, uiTitel.y + 12, 14, '#FFF8C4', 'center');
     }
   }
   function drawPause() {
@@ -933,7 +1133,7 @@
       ctx.strokeStyle = '#4FF0FF'; ctx.strokeRect(px - BW / 2, py, BW, BH);
       text(sagMode, 8, visH - 30, 12, '#4FF0FF');
     }
-    if (vfx && vfx.drawScreen) vfx.drawScreen(ctx, W, visH);
+    void 0;
   }
 
   let last = performance.now(), rafLast = last, pumping = false, workTimes = [];
@@ -1014,8 +1214,8 @@
           coins: cssBox(camX + 8 / cssPer, (8 + insets().t) / cssPer, 120 / cssPer, 24 / cssPer),
           pause: cssBox(camX + viewW - 48 / cssPer, (8 + insets().t) / cssPer, 40 / cssPer, 32 / cssPer),
           mute: cssBox(camX + viewW - 96 / cssPer, (8 + insets().t) / cssPer, 40 / cssPer, 32 / cssPer),
-          spielen: cssBox(camX + viewW / 2 - 120, viewH * 0.68, 240, 56),
-          nochmal: cssBox(act.x - act.d / 2, act.y - act.d / 2, act.d, act.d),
+          spielen: cssBox(camX + viewW / 2 - 120, viewH * 0.70, 240, 56),
+          nochmal: uiNoch ? cssBox(uiNoch.x, uiNoch.y, uiNoch.w, uiNoch.h) : cssBox(camX + 16, act.y - 26, 176, 52),
           player: cssBox(px - 40, py + BH / 2 - 70, 80, 96)
         };
       },
