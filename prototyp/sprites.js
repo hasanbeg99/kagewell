@@ -652,21 +652,12 @@
     return {
       bg: bg,
       walls: walls,
-      meadow: bake(390, 900, meadow),
       coin: bake(64, 64, coin),
       glowWarm: bake(128, 128, (g, w, h) => glow(g, w, h, 'rgba(255,220,160,0.95)', 'rgba(255,160,60,0.28)')),
-      glowCool: bake(128, 128, (g, w, h) => glow(g, w, h, 'rgba(220,240,255,0.7)', 'rgba(120,180,255,0.15)')),
-      glowGold: bake(96, 96, (g, w, h) => glow(g, w, h, 'rgba(255,230,140,0.9)', 'rgba(255,190,40,0.2)')),
       spark: bake(32, 32, (g, w, h) => glow(g, w, h, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0.2)')),
       lantern: bake(28, 44, lantern),
       portal: bake(180, 150, portal),
       cone: bake(220, 260, cone),
-      kiro: bake(170, 220, kiroBarrel),
-      kiroLoose: bake(112, 154, kiroLoose),
-      kiroLie: bake(240, 110, kiroLie),
-      kiroSit: bake(200, 160, kiroSit),
-      tara: bake(100, 168, (g, w, h) => tara(g, w, h, false)),
-      taraLean: bake(170, 200, (g, w, h) => tara(g, w, h, true)),
       katana: bake(40, 40, katana),
       barrelIcon: bake(36, 40, barrelIcon)
     };

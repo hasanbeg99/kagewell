@@ -5,6 +5,7 @@
   const qs = new URLSearchParams(location.search);
   const NO_SPAWN = qs.get('noSpawn') === '1';
   const DEBUG = qs.get('debug') === '1';
+  const HITBOX = qs.get('hitbox') === '1';
   let seed0 = qs.has('seed') ? (Number(qs.get('seed')) >>> 0) : (Date.now() >>> 0);
   function mulberry32(a) {
     return function () {
@@ -57,15 +58,84 @@
       img.src = 'assets/chars/game-3x/' + name + '.png';
     })));
   }
+  const baked = {};
+  let poseBakeKey = '';
+  const NUDGE_X = { 'kiro-barrel-slash': 7, 'kiro-barrel-duck': 5.2 };
+  const NUDGE_Y = { 'kiro-barrel-slash': 2.2, 'kiro-barrel-duck': 6.2, 'kiro-barrel-swing': -0.5 };
+  let poseCur = 'kiro-barrel-idle', poseOld = '', poseMix = 1;
+  const PIVOT_DY = 48.5;
+  const hit = { x: 0, y: 0, w: 58, h: 48 };
+  const swingBox = { x: 0, y: 0, w: 0, h: 0 };
+  const coinR = { x: 0, y: 0, w: 24, h: 24 };
+  function halfW() { return barrel === 'broken' ? 30 : 29; }
+  function boxAt(x, y, out) {
+    const pivY = y + PIVOT_DY;
+    if (barrel === 'broken') {
+      out.x = x - 30; out.y = pivY - 38; out.w = 60; out.h = 92;
+    } else {
+      out.x = x - 29; out.y = pivY - 13; out.w = 58; out.h = 48;
+    }
+    return out;
+  }
+  function bodyBox() { return boxAt(px, py, hit); }
+  function scaleFor(name) {
+    if (name === 'kiro-barrel-title' || name === 'tara-winch-ready') return SPRITE_SCALE;
+    if (name === 'kiro-lying-faint' || name === 'kiro-situp-proud' || name === 'tara-bends-over-kiro') return FAINT_SCALE;
+    return PLAY_SCALE;
+  }
+  function bakePoses() {
+    const mul = viewScale * dpr;
+    const key = mul.toFixed(3);
+    if (!mul || key === poseBakeKey) return;
+    const names = Object.keys(CHAR_PIV);
+    let ready = 0;
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i];
+      const img = charImg[name];
+      const spec = CHAR_PIV[name];
+      if (!img || !spec || !img.complete || !img.naturalWidth) continue;
+      ready++;
+      const sc = scaleFor(name);
+      const pw = Math.max(1, Math.round(spec.c[0] * sc * mul));
+      const ph = Math.max(1, Math.round(spec.c[1] * sc * mul));
+      let slot = baked[name];
+      if (!slot || slot.c.width !== pw || slot.c.height !== ph) {
+        const c = document.createElement('canvas');
+        c.width = pw; c.height = ph;
+        slot = baked[name] = { c: c, cssW: 0, cssH: 0, px: 0, py: 0 };
+      }
+      const g = slot.c.getContext('2d', { alpha: true });
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, pw, ph);
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = 'low';
+      g.drawImage(img, 0, 0, pw, ph);
+      slot.cssW = pw / mul;
+      slot.cssH = ph / mul;
+      slot.px = spec.p[0] / spec.c[0] * slot.cssW;
+      slot.py = spec.p[1] / spec.c[1] * slot.cssH;
+    }
+    if (ready === names.length) poseBakeKey = key;
+  }
+  function drawBaked(name, wx, wy) {
+    const b = baked[name];
+    if (!b) return;
+    const mul = viewScale * dpr || 1;
+    ctx.drawImage(b.c, Math.round((wx - b.px) * mul) / mul, Math.round((wy - b.py) * mul) / mul, b.cssW, b.cssH);
+  }
   function drawChar(name, wx, wy, scale, alpha) {
-    const img = charImg[name];
-    const spec = CHAR_PIV[name];
-    if (!img || !spec) return;
-    const s = scale || SPRITE_SCALE;
-    ctx.save();
-    if (alpha != null) ctx.globalAlpha = alpha;
-    ctx.drawImage(img, wx - spec.p[0] * s, wy - spec.p[1] * s, spec.c[0] * s, spec.c[1] * s);
-    ctx.restore();
+    const b = baked[name];
+    if (!b) return;
+    const prevA = ctx.globalAlpha;
+    if (alpha != null) ctx.globalAlpha = prevA * alpha;
+    const base = scaleFor(name);
+    if (scale && Math.abs(scale - base) > 0.02) {
+      const k = scale / base;
+      const mul = viewScale * dpr || 1;
+      const cssW = b.cssW * k, cssH = b.cssH * k;
+      ctx.drawImage(b.c, Math.round((wx - b.px * k) * mul) / mul, Math.round((wy - b.py * k) * mul) / mul, cssW, cssH);
+    } else drawBaked(name, wx, wy);
+    ctx.globalAlpha = prevA;
   }
   const KEY = { coins: 'kagewell.prototyp.coins', bestD: 'kagewell.prototyp.bestDepth', bestS: 'kagewell.prototyp.bestScore', seen: 'kagewell.prototyp.seen' };
   const store = {
@@ -104,7 +174,10 @@
   let joyAnchor = null, joyKnob = { dx: 0, dy: 0 }, joyFrom = null, joyTo = null, joyBack = 0, joyId = null;
   let restX = 300, restY = 700, ringD = 128, knobD = 52, deadFrac = 0.12;
   let act = { x: 70, y: 760, d: 72, hit: 88 }, barrelBtn = { x: 160, y: 760, d: 58, show: false };
-  let ents = [], coins = [], parts = [], ghosts = [];
+  let ents = [], coins = [], parts = [];
+  const ghost = [{ x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 0 }];
+  let ghostN = 0, hudCoinT = 0, hudSpareT = 0;
+  const washGrad = {}, washKey = {};
   let bot = null, frameTimes = [], workTimes = [], inputLags = [], adaptDts = [], coinPop = 0;
   const ptrs = new Map();
   const SEG = 12;
@@ -120,10 +193,10 @@
   function iint(a, b) { return (ir(a, b + 1)) | 0; }
   function choice(w) { let t = 0; for (const k in w) t += w[k]; let r = rng() * t; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return Object.keys(w)[0]; }
   function depthM() { return depthPx / C.pxPerMeter; }
-  function minX() { return C.wall + BW / 2; }
-  function maxX() { return W - C.wall - BW / 2; }
-  function gapL(x) { return (x - BW / 2) - C.wall; }
-  function gapR(x) { return (W - C.wall) - (x + BW / 2); }
+  function minX() { return C.wall + halfW(); }
+  function maxX() { return W - C.wall - halfW(); }
+  function gapL(x) { return (x - halfW()) - C.wall; }
+  function gapR(x) { return (W - C.wall) - (x + halfW()); }
   function atWall(x) { x = x == null ? px : x; return gapL(x) <= C.wallContactPx || gapR(x) <= C.wallContactPx; }
   function atLeft(x) { return gapL(x == null ? px : x) <= C.wallContactPx; }
   function playBottom() {
@@ -181,6 +254,7 @@
       resize.bakeKey = bakeKey;
       art = rootBake().build(viewScale * dpr);
     }
+    bakePoses();
   }
   function rootBake() { return window.KWBake || null; }
   function burst(x, y, n, col, speed, life, grav) {
@@ -240,10 +314,11 @@
   function hitRect(p, x, y, w, h) { return p.x >= x && p.y >= y && p.x <= x + w && p.y <= y + h; }
   function hitCircle(p, c, rad) { return Math.hypot(p.x - c.x, p.y - c.y) <= rad; }
 
+  let queuedAction = '';
   function predict() {
-    if (state !== 'play' && state !== 'portal') return 'locked';
-    if (swingPhase) return 'locked';
+    if ((state !== 'play' && state !== 'portal') || swingPhase) return 'locked';
     if (barrel === 'intact' && atWall() && swingCd <= 0) return 'swing';
+    if (slashCd > 0 || slashPhase) return 'locked';
     return 'sword';
   }
   function steer(dx, dy) {
@@ -303,7 +378,12 @@
       joyId = e.pointerId;
       joyAnchor = { x: clamp(p.x, ringD / 2, W - ringD / 2), y: clamp(p.y, hudBottom + ringD / 2, visH - ringD / 2) };
       joyBack = 0; readJoy();
-    } else if (role === 'action') { pressed = true; bufUntil = performance.now() + C.actionBufferMs; tryAction(); }
+    } else if (role === 'action') {
+      pressed = true;
+      queuedAction = predict();
+      bufUntil = queuedAction === 'locked' ? 0 : performance.now() + C.actionBufferMs;
+      tryAction();
+    }
     else if (role === 'barrel') tryEquip();
     pump();
   }
@@ -358,7 +438,7 @@
     px = W / 2; py = Math.min(360, visH * 0.46); moveK = 0; holdMs = 0; coast = null; stickDir = null; axisLock = null;
     barrel = 'intact'; spares = C.spareStart; invuln = 0; equipT = 0; duckT = 0; visSag = 0;
     slashPhase = null; slashT = 0; slashCd = 0; slashSerial++; bufUntil = 0;
-    swingPhase = null; swingT = 0; swingU = 0; swingCd = 0; swingKills = 0; ghosts = [];
+    swingPhase = null; swingT = 0; swingU = 0; swingCd = 0; swingKills = 0; ghostN = 0;
     depthPx = 0; playMs = 0; score = 0; runCoins = 0; combo = 1; comboAt = -1e9;
     playerMoved = 0; unfair = false; caused = false; firstCreep = false; knotLock = 0;
     waveT = 0; waveN = 1; waveOn = true; attackAt = 0; lastImpact = -1e9;
@@ -409,13 +489,17 @@
     return best || lastSide || 1;
   }
   function tryAction() {
-    if (performance.now() > bufUntil) return;
+    if (!queuedAction || performance.now() > bufUntil) { queuedAction = ''; return; }
     if ((state !== 'play' && state !== 'portal') || swingPhase) return;
-    const want = predict();
-    if (want === 'locked') return;
-    if (want === 'swing') { startSwing(); bufUntil = 0; actionLast = 'swing'; return; }
-    if (slashCd > 0 || slashPhase) return;
-    startSlash(); bufUntil = 0; actionLast = 'sword';
+    if (queuedAction === 'swing') {
+      if (!(barrel === 'intact' && atWall() && swingCd <= 0)) { queuedAction = ''; bufUntil = 0; return; }
+      startSwing(); queuedAction = ''; bufUntil = 0; actionLast = 'swing'; return;
+    }
+    if (queuedAction === 'sword') {
+      if (slashCd > 0 || slashPhase) { queuedAction = ''; bufUntil = 0; return; }
+      startSlash(); queuedAction = ''; bufUntil = 0; actionLast = 'sword'; return;
+    }
+    queuedAction = ''; bufUntil = 0;
   }
   function startSlash() {
     slashPhase = 'windup'; slashT = 0; slashCd = C.swordCd; slashSerial++;
@@ -423,9 +507,9 @@
     KWAudio.play('sword_slash');
   }
   function startSwing() {
-    swingPhase = 'windup'; swingT = 0; swingU = 0; swingKills = 0; swingHit = false; ghosts = [];
+    swingPhase = 'windup'; swingT = 0; swingU = 0; swingKills = 0; swingHit = false; ghostN = 0;
     swingFromX = px; swingFromY = py; swingDir = atLeft() ? 1 : -1;
-    swingToX = swingDir > 0 ? (W - C.wall - BW / 2 - 4) : (C.wall + BW / 2 + 4);
+    swingToX = swingDir > 0 ? (W - C.wall - halfW() - 4) : (C.wall + halfW() + 4);
     KWAudio.play('barrel_swing');
   }
   function swordHits() {
@@ -549,7 +633,7 @@
     const spots = [[px - side, py], [px + side, py], [px, py - up], [px, py + down]];
     return spots.some(s => {
       const x = clamp(s[0], minX(), maxX()), y = clamp(s[1], C.barrelTopMin, playBottom());
-      const b = { x: x - BW / 2, y: y, w: BW, h: BH };
+      const b = boxAt(x, y, hit);
       return !boxes.some(h => overlap(b, h));
     });
   }
@@ -596,7 +680,7 @@
           e.ext = e.reach * (1 - ease(clamp(e.t / 280, 0, 1)));
           if (e.t >= 280) { e.state = 'idle'; e.t = 0; e.ext = 0; e.harmless = false; e.first = false; }
         }
-        if ((e.state === 'lunge' || e.state === 'hold') && !e.harmless && overlap({ x: px - BW / 2, y: py, w: BW, h: BH }, hazardBox(e))) hurt(e);
+        if ((e.state === 'lunge' || e.state === 'hold') && !e.harmless && overlap(bodyBox(), hazardBox(e))) hurt(e);
       } else if (e.kind === 'bat') {
         if (e.state === 'aim') {
           e.y += (py - 20 - e.y) * Math.min(1, dt / 400);
@@ -609,7 +693,7 @@
       } else if (e.kind === 'hazard') {
         e.x = e.side < 0 ? C.wall + Math.max(12, e.ext) * 0.5 : W - C.wall - Math.max(12, e.ext) * 0.5;
         if (e.state === 'grow') { e.ext = e.reach * ease(clamp(e.t / 500, 0, 1)); if (e.t >= 500) e.state = 'out'; }
-        if (e.ext > 16 && overlap({ x: px - BW / 2, y: py, w: BW, h: BH }, hazardBox(e))) hurt(e);
+        if (e.ext > 16 && overlap(bodyBox(), hazardBox(e))) hurt(e);
       } else if (e.kind === 'cutter') {
         if (e.state === 'descend') {
           e.y += dt * 0.12; e.x = ropeAx + (e.x < px ? -28 : 28);
@@ -678,24 +762,32 @@
     void teach;
   }
   function updateCoins(dt) {
-    const body = { x: px - BW / 2, y: py, w: BW, h: BH };
-    for (const c of coins) {
+    const body = bodyBox();
+    for (let i = 0; i < coins.length; i++) {
+      const c = coins[i];
       if (c.got) continue;
       c.t += dt;
       const sy = c.worldY - depthPx + Math.sin(c.t * 0.01) * 2;
       c.sy = sy;
-      if (overlap(body, { x: c.x - 12, y: sy - 12, w: 24, h: 24 })) {
-        c.got = true; c.fly = 0; runCoins++; score += C.coinPoints;
-        const semi = c.chain ? c.idx : 0;
-        KWAudio.play('score_pickup', { semi: semi });
+      coinR.x = c.x - 12; coinR.y = sy - 12;
+      if (overlap(body, coinR)) {
+        c.got = true; c.fly = 0; runCoins++; score += C.coinPoints; hudCoinT = 1;
+        KWAudio.play('score_pickup', { semi: c.chain ? c.idx : 0 });
       }
     }
-    coins = coins.filter(c => {
-      if (c.got) return c.fly != null && c.fly < 360;
-      const sy = c.worldY - depthPx;
-      return sy > -60 && sy < visH + 80;
-    });
-    for (const c of coins) if (c.got) c.fly += dt;
+    let cw = 0;
+    for (let i = 0; i < coins.length; i++) {
+      const c = coins[i];
+      if (c.got) {
+        if (c.fly == null || c.fly >= 360) continue;
+        c.fly += dt;
+      } else {
+        const sy = c.worldY - depthPx;
+        if (sy <= -60 || sy >= visH + 80) continue;
+      }
+      coins[cw++] = c;
+    }
+    coins.length = cw;
   }
 
   function barrelSway() {
@@ -795,12 +887,18 @@
       swingT += dt; swingU = clamp(swingT / C.swingMs, 0, 1);
       px = lerp(swingFromX, swingToX, swingU);
       py = swingFromY - Math.sin(swingU * Math.PI) * C.swingArc;
-      if (ghosts.length < 3 && (ghosts.length === 0 || swingT - ghosts[ghosts.length - 1].t >= 70)) ghosts.push({ x: px, y: py, t: swingT });
-      const box = { x: px - BW / 2 - C.swingPad, y: py - C.swingPad, w: BW + C.swingPad * 2, h: BH + C.swingPad * 2 };
+      if (ghostN < 3 && (ghostN === 0 || swingT - ghost[ghostN - 1].t >= 70)) {
+        const g = ghost[ghostN++];
+        g.x = px; g.y = py; g.t = swingT;
+      }
+      const hb = bodyBox();
+      swingBox.x = hb.x - C.swingPad; swingBox.y = hb.y - C.swingPad;
+      swingBox.w = hb.w + C.swingPad * 2; swingBox.h = hb.h + C.swingPad * 2;
+      const box = swingBox;
       for (const e of ents) if (e.alive && e.hp < 1e8 && e.kind !== 'hazard' && overlap(box, { x: e.x - 20, y: e.y - 16, w: 40, h: 32 })) kill(e, swingDir, true);
       if (swingT >= C.swingMs) {
         px = swingToX; py = swingFromY; swingPhase = null; swingCd = C.swingCd; impact = 1; duckT = C.duckMs;
-        ghosts = [];
+        ghostN = 0;
         KWAudio.play('barrel_land');
         shake = Math.max(shake, 3.5);
         if (swingHit) hitStop = Math.max(hitStop, C.hitStopSwing);
@@ -819,8 +917,8 @@
     if (state === 'play') { spawner(dt); updateEnts(dt); updateCoins(dt); }
     if (pickup) {
       pickup.t += dt; const sy = pickup.worldY - depthPx;
-      if (overlap({ x: px - BW / 2, y: py, w: BW, h: BH }, { x: pickup.x - 16, y: sy - 18, w: 32, h: 36 })) {
-        if (spares < C.spareMax) { spares++; KWAudio.play('barrel_pickup'); }
+      if (overlap(bodyBox(), { x: pickup.x - 16, y: sy - 18, w: 32, h: 36 })) {
+        if (spares < C.spareMax) { spares++; hudSpareT = 1; KWAudio.play('barrel_pickup'); }
         lastPickupM = depthM(); pickupRoll = -1; pickup = null;
       } else if (sy < -40) pickup = null;
     }
@@ -829,9 +927,18 @@
     tryAction();
     breakFlash = Math.max(0, breakFlash - dt);
     if (breakPop > 0) breakPop = Math.max(0, breakPop - dt / 180);
-    for (const b of bits) { b.x += b.vx * dt / 1000; b.y += b.vy * dt / 1000; b.vy += 400 * dt / 1000; b.a += dt * 0.01; b.life -= dt; }
-    bits = bits.filter(b => b.life > 0);
-    scarfStep(dt);
+    if (hudCoinT > 0) hudCoinT = Math.max(0, hudCoinT - dt / 160);
+    if (hudSpareT > 0) hudSpareT = Math.max(0, hudSpareT - dt / 160);
+    const nextPose = poseName();
+    if (nextPose !== poseCur) { poseOld = poseCur; poseCur = nextPose; poseMix = 0; }
+    if (poseMix < 1) poseMix = Math.min(1, poseMix + dt / 70);
+    let bi = 0;
+    for (let i = 0; i < bits.length; i++) {
+      const b = bits[i];
+      b.x += b.vx * dt / 1000; b.y += b.vy * dt / 1000; b.vy += 400 * dt / 1000; b.a += dt * 0.01; b.life -= dt;
+      if (b.life > 0) bits[bi++] = b;
+    }
+    bits.length = bi;
     dustStep(dt);
     const grip = harnessOf(px, py, visualRot(), sagMode === 'B' ? visSag : 0);
     ropeStep(dt, grip.x, grip.y);
@@ -860,7 +967,7 @@
     if (bot === 'passive') { stickDir = null; return; }
     if (bot === 'random') {
       if (rng() < 0.05) stickDir = ['left', 'right', 'up', 'down'][(rng() * 4) | 0];
-      if (rng() < 0.02) { bufUntil = performance.now() + C.actionBufferMs; tryAction(); }
+      if (rng() < 0.02) { queuedAction = predict(); bufUntil = queuedAction === 'locked' ? 0 : performance.now() + C.actionBufferMs; tryAction(); }
       return;
     }
     let threat = null, bd = 1e9;
@@ -871,7 +978,11 @@
     else if (px < W * 0.38) stickDir = 'right';
     else if (px > W * 0.62) stickDir = 'left';
     else stickDir = (playMs / 700 | 0) % 2 ? 'up' : 'down';
-    if (threat && Math.abs(threat.x - px) < C.swordR && Math.abs(threat.y - py) < 90) { bufUntil = performance.now() + 120; tryAction(); }
+    if (threat && Math.abs(threat.x - px) < C.swordR && Math.abs(threat.y - py) < 90) {
+      queuedAction = predict();
+      bufUntil = queuedAction === 'locked' ? 0 : performance.now() + 120;
+      tryAction();
+    }
   }
 
   function scarfStep(dt) {
@@ -970,13 +1081,19 @@
     drawWell.at = performance.now();
     const palOf = (id) => (window.KWBake && KWBake.BIO && KWBake.BIO[id]) || { sky: '#16385A', mid: '#102438', deep: '#070E18' };
     const wash = (id, alpha) => {
-      const pal = palOf(id);
+      const key = id + (visH | 0);
+      let g = washGrad[id];
+      if (!g || washKey[id] !== key) {
+        const pal = palOf(id);
+        g = ctx.createLinearGradient(0, 0, 0, visH);
+        g.addColorStop(0, pal.sky);
+        g.addColorStop(0.55, pal.mid);
+        g.addColorStop(1, pal.deep);
+        washGrad[id] = g;
+        washKey[id] = key;
+      }
       ctx.save();
       ctx.globalAlpha = alpha;
-      const g = ctx.createLinearGradient(0, 0, 0, visH);
-      g.addColorStop(0, pal.sky);
-      g.addColorStop(0.55, pal.mid);
-      g.addColorStop(1, pal.deep);
       ctx.fillStyle = g;
       ctx.fillRect(C.wall, -2, W - C.wall * 2, visH + 8);
       ctx.restore();
@@ -1104,30 +1221,37 @@
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
+  function drawPoseAt(name, x, y, alpha) {
+    if (!baked[name]) return;
+    const nx = NUDGE_X[name] || 0;
+    const ny = NUDGE_Y[name] || 0;
+    const prevA = ctx.globalAlpha;
+    ctx.globalAlpha = prevA * alpha;
+    drawBaked(name, x + nx, y + ny);
+    ctx.globalAlpha = prevA;
+  }
   function drawPlayer(alpha) {
     const x = lerpA(prev.px, px, alpha) + barrelSway();
-    const y = lerpA(prev.py, py, alpha);
-    const bob = lerpA(prev.sag, visSag, alpha);
-    const pose = poseName();
-    const spec = CHAR_PIV[pose];
+    const y = lerpA(prev.py, py, alpha) + PIVOT_DY + lerpA(prev.sag, visSag, alpha);
     const hidden = barrel === 'broken' && invuln > 0 && ((invuln / 70) | 0) % 2 === 0;
     const pop = breakPop > 0 ? 1 + Math.sin(breakPop * Math.PI) * 0.16 : 1;
     ctx.save();
     ctx.beginPath();
     ctx.rect(C.wall - 1, -80, W - C.wall * 2 + 2, visH + 160);
     ctx.clip();
-    ctx.translate(x, y + BH / 2 + bob);
-    if (pop !== 1) ctx.scale(pop, pop);
-    if (hidden) ctx.globalAlpha = 0.45;
-    if (spec && charImg[pose]) {
-      const s = PLAY_SCALE;
-      ctx.drawImage(charImg[pose], -spec.p[0] * s, -spec.p[1] * s, spec.c[0] * s, spec.c[1] * s);
+    if (pop !== 1) {
+      ctx.translate(x, y);
+      ctx.scale(pop, pop);
+      ctx.translate(-x, -y);
     }
+    if (hidden) ctx.globalAlpha *= 0.45;
+    if (poseOld && poseMix < 1) drawPoseAt(poseOld, x, y, 1 - poseMix);
+    drawPoseAt(poseCur, x, y, poseOld && poseMix < 1 ? poseMix : 1);
     if (breakFlash > 40) {
       ctx.globalAlpha = clamp((breakFlash - 40) / 50, 0, 0.45);
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(0, -8, 18, 0, TAU);
+      ctx.arc(x, y - 8, 18, 0, TAU);
       ctx.fill();
     }
     ctx.restore();
@@ -1378,16 +1502,22 @@
       ctx.drawImage(art.barrelIcon, pickup.x - 16, sy - 20, 32, 36);
     }
     for (const e of ents) drawEnt(e, alpha);
-    if (swingPhase === 'fly' && ghosts.length && charImg['kiro-barrel-swing']) {
-      const spec = CHAR_PIV['kiro-barrel-swing'];
-      const s = PLAY_SCALE;
-      ghosts.forEach((g, i) => {
+    if (swingPhase === 'fly' && ghostN && baked['kiro-barrel-swing']) {
+      for (let i = 0; i < ghostN; i++) {
+        const g = ghost[i];
         ctx.save();
         ctx.globalAlpha = 0.14 + i * 0.05;
-        ctx.translate(g.x, g.y + BH / 2);
-        ctx.drawImage(charImg['kiro-barrel-swing'], -spec.p[0] * s, -spec.p[1] * s, spec.c[0] * s, spec.c[1] * s);
+        drawBaked('kiro-barrel-swing', g.x, g.y + PIVOT_DY);
         ctx.restore();
-      });
+      }
+    }
+    if (HITBOX) {
+      const hb = bodyBox();
+      ctx.save();
+      ctx.strokeStyle = '#FF3355';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(hb.x, hb.y, hb.w, hb.h);
+      ctx.restore();
     }
     drawBits(alpha);
     drawPlayer(alpha);
@@ -1433,16 +1563,30 @@
     if (depthX + dw + gap > rightX) dw = Math.max(70 / cssPer, rightX - gap - depthX);
     return { top: top, h: h, coinX: coinX, coinW: coinW, depthX: depthX, depthW: dw, spareY: top + h + 6 / cssPer };
   }
+  function hudPop(x, y, w, h, t) {
+    if (t <= 0) return false;
+    const s = 1 + Math.sin(t * Math.PI) * 0.14;
+    ctx.save();
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.scale(s, s);
+    ctx.translate(-(x + w / 2), -(y + h / 2));
+    return true;
+  }
   function drawHud() {
     const b = hudBoxes();
     const fs = Math.max(15, 15 / cssPer);
+    const coinPopOn = hudPop(b.coinX, b.top, b.coinW, b.h, hudCoinT);
     pill(b.coinX, b.top, b.coinW, b.h, '#10182C', '#FFD84A');
     if (art && art.coin) ctx.drawImage(art.coin, b.coinX + 6, b.top + 4, b.h - 8, b.h - 8);
     label(String(runCoins), b.coinX + b.h + 4, b.top + b.h / 2, fs * 0.9, '#FFD84A', 'left');
+    if (coinPopOn) ctx.restore();
+    const spareW = Math.min(b.coinW, 96 / cssPer);
+    const sparePop = hudPop(b.coinX, b.spareY, spareW, b.h - 2, hudSpareT);
     const spCol = spares > 0 ? '#E8C48A' : '#8B93A6';
-    pill(b.coinX, b.spareY, Math.min(b.coinW, 96 / cssPer), b.h - 2, '#10182C', spCol);
+    pill(b.coinX, b.spareY, spareW, b.h - 2, '#10182C', spCol);
     if (art && art.barrelIcon) ctx.drawImage(art.barrelIcon, b.coinX + 6, b.spareY + 2, 20, 22);
     label('x' + spares, b.coinX + 30, b.spareY + (b.h - 2) / 2, fs * 0.85, spCol, 'left');
+    if (sparePop) ctx.restore();
     pill(b.depthX, b.top, b.depthW, b.h + 2, '#162033', '#EAD19B');
     label(Math.floor(depthM()) + ' m', b.depthX + b.depthW / 2, b.top + (b.h + 2) / 2, Math.max(16, 18 / cssPer), '#F7F4EC', 'center');
     const pr = camX + viewW - 46 / cssPer;
@@ -1485,15 +1629,16 @@
     chev(-Rnotch, 0, stickDir === 'left');
     chev(Rnotch, 0, stickDir === 'right');
     const icon = predict();
-    const swingReady = icon === 'swing';
+    const showSwing = icon === 'swing' || (icon === 'locked' && barrel === 'intact' && atWall() && !swingPhase);
     const press = pressed ? 3 : 0;
-    const grd = ctx.createRadialGradient(act.x - act.d * 0.2, act.y - act.d * 0.25, act.d * 0.1, act.x, act.y, act.d * 0.55);
-    grd.addColorStop(0, pressed ? '#314268' : (swingReady ? '#A56A32' : '#3A4C78'));
-    grd.addColorStop(1, pressed ? '#182033' : (swingReady ? '#3A2414' : '#141C30'));
-    disc(act.x, act.y + press, act.d / 2, grd, swingReady ? '#FFD84A' : '#E4EEF6');
+    disc(act.x, act.y + press, act.d / 2, pressed ? '#24304C' : (showSwing ? '#6A4424' : '#243456'), showSwing ? '#FFD84A' : '#E4EEF6');
     if (art) {
-      const ic = swingReady ? art.barrelIcon : art.katana;
-      if (ic) ctx.drawImage(ic, act.x - 20, act.y - 20 + press, 40, 40);
+      const ic = showSwing ? art.barrelIcon : art.katana;
+      if (ic) {
+        if (icon === 'locked') ctx.globalAlpha = 0.45;
+        ctx.drawImage(ic, act.x - 20, act.y - 20 + press, 40, 40);
+        ctx.globalAlpha = 1;
+      }
     }
     if (atWall() && swingCd > 0 && barrel === 'intact') {
       ctx.strokeStyle = '#4FF0FF';
@@ -1828,8 +1973,10 @@
     const poseIn = ease(clamp(faintT / 280, 0, 1));
     ctx.save();
     ctx.globalAlpha = 0.4 + 0.6 * poseIn;
-    if (sit) drawChar('kiro-situp-proud', 196, ground - 8, FAINT_SCALE, 1);
-    else if (faintT < 320) drawChar('kiro-lying-faint', 188, ground - 16, FAINT_SCALE, 1);
+    if (sit) {
+      drawChar('kiro-situp-proud', 176, ground - 8, FAINT_SCALE, 1);
+      drawChar('tara-winch-ready', 268, ground, 0.42, 1);
+    } else if (faintT < 320) drawChar('kiro-lying-faint', 188, ground - 16, FAINT_SCALE, 1);
     else drawChar('tara-bends-over-kiro', 196, ground - 22, FAINT_SCALE, 1);
     ctx.restore();
     const shown = Math.min(runCoins, Math.ceil(clamp((faintT - 150) / 1050, 0, 1) * Math.max(0, runCoins)));
@@ -1890,7 +2037,7 @@
     alpha = clamp(alpha, 0, 1);
     ctx.setTransform(viewScale * dpr, 0, 0, viewScale * dpr, 0, 0);
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    ctx.imageSmoothingQuality = 'low';
     ctx.fillStyle = '#070B14';
     ctx.fillRect(-30, -30, W + 60, visH + 60);
     if (shake > 0.05) {
@@ -2068,7 +2215,7 @@
       }
     };
   }
-  function onShow() { last = -1; acc = 0; resize(); }
+  function onShow() { last = -1; acc = 0; poseBakeKey = ''; resize(); }
   async function boot() {
     titleAt = performance.now();
     await loadCharImages();
