@@ -98,10 +98,15 @@
       g.fillStyle = '#1A2033';
       g.beginPath(); g.arc(cx - r * 0.22, cy + r * 0.14, r * 0.07, 0, TAU); g.fill();
       g.beginPath(); g.arc(cx + r * 0.30, cy + r * 0.14, r * 0.07, 0, TAU); g.fill();
-      g.fillStyle = '#fff';
-      g.beginPath(); g.arc(cx - r * 0.18, cy + r * 0.08, r * 0.035, 0, TAU); g.fill();
-      g.beginPath(); g.arc(cx + r * 0.34, cy + r * 0.08, r * 0.035, 0, TAU); g.fill();
+    g.fillStyle = '#fff';
+    g.beginPath(); g.arc(cx - r * 0.18, cy + r * 0.08, r * 0.045, 0, TAU); g.fill();
+    g.beginPath(); g.arc(cx + r * 0.34, cy + r * 0.08, r * 0.045, 0, TAU); g.fill();
     }
+    g.strokeStyle = 'rgba(255,255,255,0.32)';
+    g.lineWidth = Math.max(2, r * 0.09);
+    g.beginPath();
+    g.arc(cx - r * 0.1, cy - r * 0.15, r * 0.92, Math.PI * 1.15, Math.PI * 1.9);
+    g.stroke();
   }
   function scarfKnot(g, x, y, s) {
     g.fillStyle = '#E2283C';
@@ -141,23 +146,48 @@
       g.stroke();
     }
     g.restore();
-    hoop(g, left - 2, top + bh * 0.28, bw + 4, Math.max(6, bh * 0.09));
-    hoop(g, left - 1, top + bh * 0.68, bw + 2, Math.max(6, bh * 0.09));
+    hoop(g, left - 2, top + bh * 0.22, bw + 4, Math.max(7, bh * 0.1));
+    hoop(g, left - 1, top + bh * 0.62, bw + 2, Math.max(7, bh * 0.1));
+    g.strokeStyle = 'rgba(255,236,200,0.28)';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(left + bw * 0.12, top + 16);
+    g.quadraticCurveTo(left + 6, top + bh * 0.45, left + bw * 0.16, top + bh - 14);
+    g.stroke();
+  }
+  function sleeve(g, x, y, rot, len) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(rot);
+    const grd = g.createLinearGradient(-8, 0, 8, 0);
+    grd.addColorStop(0, '#1A2748');
+    grd.addColorStop(0.45, '#3E5694');
+    grd.addColorStop(1, '#141C34');
+    g.fillStyle = grd;
+    pathRound(g, -8, 0, 16, len, 8);
+    g.fill();
+    g.fillStyle = '#F0C9A4';
+    g.beginPath(); g.arc(0, len + 1, 7, 0, TAU); g.fill();
+    g.restore();
   }
   function kiroBarrel(g, w, h) {
     const cx = w / 2;
-    const top = h * 0.46;
-    const bw = w * 0.74;
-    g.fillStyle = 'rgba(0,0,0,0.30)';
-    g.beginPath(); g.ellipse(cx, h * 0.93, w * 0.32, h * 0.04, 0, 0, TAU); g.fill();
-    barrelBody(g, cx, top, bw, h * 0.46);
-    g.fillStyle = '#140E0A';
-    g.beginPath();
-    g.ellipse(cx, top + 12, bw * 0.34, 9, 0, 0, TAU);
-    g.fill();
-    head(g, cx, top + h * 0.02, w * 0.19, 'open');
+    const top = 108;
+    const bw = 132;
+    g.fillStyle = 'rgba(0,0,0,0.38)';
+    g.beginPath(); g.ellipse(cx, 208, 58, 10, 0, 0, TAU); g.fill();
+    barrelBody(g, cx, top, bw, 96);
+    g.fillStyle = '#101820';
+    g.beginPath(); g.ellipse(cx, top + 14, bw * 0.36, 12, 0, 0, TAU); g.fill();
+    g.fillStyle = '#24386A';
+    g.beginPath(); g.ellipse(cx, top + 2, 58, 18, 0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(180,200,255,0.18)';
+    g.beginPath(); g.ellipse(cx - 16, top - 2, 18, 7, -0.4, 0, TAU); g.fill();
+    sleeve(g, cx - 46, top - 8, 0.85, 42);
+    sleeve(g, cx + 46, top - 8, -0.85, 42);
+    head(g, cx, top - 18, 30, 'open');
     rim(g, cx, top, bw);
-    scarfKnot(g, cx + w * 0.30, top + h * 0.06, w * 0.05);
+    scarfKnot(g, cx + 28, top - 2, 7);
   }
   function limb(g, x, y, w, h, rot, col) {
     g.save();
@@ -184,45 +214,55 @@
   }
   function kiroLoose(g, w, h) {
     const cx = w * 0.5;
-    g.fillStyle = 'rgba(0,0,0,0.25)';
-    g.beginPath(); g.ellipse(cx, h * 0.94, w * 0.26, h * 0.035, 0, 0, TAU); g.fill();
-    limb(g, cx - 9, h * 0.62, 10, h * 0.28, 0.08, '#24325E');
-    limb(g, cx + 8, h * 0.62, 10, h * 0.28, -0.06, '#24325E');
-    g.fillStyle = '#2A3C72';
-    pathRound(g, cx - 16, h * 0.40, 32, h * 0.28, 12);
+    g.fillStyle = 'rgba(0,0,0,0.32)';
+    g.beginPath(); g.ellipse(cx, h * 0.94, w * 0.28, 8, 0, 0, TAU); g.fill();
+    limb(g, cx - 12, h * 0.62, 12, h * 0.28, 0.08, '#24325E');
+    limb(g, cx + 12, h * 0.62, 12, h * 0.28, -0.05, '#24325E');
+    const body = g.createLinearGradient(cx - 20, h * 0.38, cx + 20, h * 0.7);
+    body.addColorStop(0, '#4A62A0');
+    body.addColorStop(0.5, '#2A3C72');
+    body.addColorStop(1, '#151C36');
+    g.fillStyle = body;
+    pathRound(g, cx - 22, h * 0.40, 44, h * 0.28, 14);
     g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.14)';
-    pathRound(g, cx - 12, h * 0.42, 10, h * 0.12, 5);
-    g.fill();
-    limb(g, cx - 18, h * 0.42, 8, h * 0.2, 0.55, '#31457E');
-    limb(g, cx + 16, h * 0.42, 8, h * 0.18, -0.4, '#31457E');
-    head(g, cx, h * 0.30, w * 0.24, 'open');
+    sleeve(g, cx - 24, h * 0.42, 0.7, h * 0.2);
+    sleeve(g, cx + 24, h * 0.40, -0.45, h * 0.18);
+    head(g, cx, h * 0.28, w * 0.22, 'open');
     g.strokeStyle = '#E2283C';
-    g.lineWidth = 5;
+    g.lineWidth = 6;
     g.lineCap = 'round';
     g.beginPath();
-    g.moveTo(cx + 8, h * 0.40);
-    g.quadraticCurveTo(cx + w * 0.42, h * 0.48, cx + w * 0.3, h * 0.66);
+    g.moveTo(cx + 10, h * 0.38);
+    g.quadraticCurveTo(cx + w * 0.4, h * 0.46, cx + w * 0.28, h * 0.64);
+    g.stroke();
+    g.strokeStyle = '#FF9AA6';
+    g.lineWidth = 2;
     g.stroke();
   }
   function kiroLie(g, w, h) {
-    g.fillStyle = 'rgba(0,0,0,0.2)';
-    g.beginPath(); g.ellipse(w * 0.5, h * 0.78, w * 0.4, h * 0.08, 0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.28)';
+    g.beginPath(); g.ellipse(w * 0.5, h * 0.78, w * 0.36, 10, 0, 0, TAU); g.fill();
     g.strokeStyle = '#E2283C';
-    g.lineWidth = 7;
+    g.lineWidth = 8;
     g.lineCap = 'round';
     g.beginPath();
-    g.moveTo(w * 0.34, h * 0.48);
-    g.bezierCurveTo(w * 0.16, h * 0.22, w * 0.02, h * 0.55, w * 0.14, h * 0.72);
+    g.moveTo(w * 0.28, h * 0.5);
+    g.bezierCurveTo(w * 0.1, h * 0.22, w * 0.02, h * 0.62, w * 0.16, h * 0.74);
     g.stroke();
     g.strokeStyle = '#FF9AA6';
-    g.lineWidth = 2.5;
+    g.lineWidth = 3;
     g.stroke();
-    limb(g, w * 0.62, h * 0.52, 12, h * 0.22, 1.35, '#24325E');
-    limb(g, w * 0.78, h * 0.50, 12, h * 0.2, 1.05, '#24325E');
-    g.fillStyle = '#24325E';
-    g.beginPath(); g.ellipse(w * 0.5, h * 0.55, w * 0.2, h * 0.2, -0.15, 0, TAU); g.fill();
-    head(g, w * 0.26, h * 0.42, h * 0.30, 'swirl');
+    limb(g, w * 0.55, h * 0.58, 14, h * 0.22, 1.2, '#24325E');
+    limb(g, w * 0.72, h * 0.56, 14, h * 0.2, 0.95, '#24325E');
+    const body = g.createLinearGradient(w * 0.3, h * 0.4, w * 0.7, h * 0.7);
+    body.addColorStop(0, '#4A62A0');
+    body.addColorStop(1, '#1A2444');
+    g.fillStyle = body;
+    g.beginPath();
+    g.ellipse(w * 0.48, h * 0.58, w * 0.22, h * 0.2, -0.1, 0, TAU);
+    g.fill();
+    sleeve(g, w * 0.34, h * 0.5, 0.4, h * 0.16);
+    head(g, w * 0.24, h * 0.42, 26, 'swirl');
   }
   function kiroSit(g, w, h) {
     g.fillStyle = 'rgba(0,0,0,0.2)';
@@ -243,7 +283,8 @@
     scarfKnot(g, w * 0.66, h * 0.4, 5);
   }
   function tara(g, w, h, lean) {
-    const cx = lean ? w * 0.58 : w * 0.5;
+    if (lean) { taraKneel(g, w, h); return; }
+    const cx = w * 0.5;
     const cy = lean ? h * 0.34 : h * 0.30;
     g.fillStyle = 'rgba(0,0,0,0.2)';
     g.beginPath(); g.ellipse(cx, h * 0.9, w * 0.28, 6, 0, 0, TAU); g.fill();
@@ -295,64 +336,109 @@
     g.lineWidth = 1.4;
     g.beginPath(); g.arc(cx, cy + 7, 3.2, 0.15, Math.PI - 0.15); g.stroke();
     g.fillStyle = '#F0C4A4';
-    pathRound(g, cx - w * 0.02, cy + 16, 8, h * 0.16, 4);
+    pathRound(g, cx + 8, cy + 18, 8, h * 0.16, 4);
+    g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.25)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(cx - 2, cy - 4, w * 0.12, Math.PI * 1.2, Math.PI * 1.85);
+    g.stroke();
+  }
+  function taraKneel(g, w, h) {
+    g.fillStyle = 'rgba(0,0,0,0.28)';
+    g.beginPath(); g.ellipse(w * 0.62, h * 0.9, 70, 9, 0, 0, TAU); g.fill();
+    g.fillStyle = '#C47890';
+    g.beginPath(); g.ellipse(w * 0.66, h * 0.8, 26, 12, 0.2, 0, TAU); g.fill();
+    g.fillStyle = '#E7A0B4';
+    g.beginPath(); g.ellipse(w * 0.55, h * 0.58, 16, 28, -0.6, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.beginPath(); g.ellipse(w * 0.5, h * 0.5, 8, 16, -0.6, 0, TAU); g.fill();
+    g.strokeStyle = '#F0C4A4';
+    g.lineWidth = 8;
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(w * 0.48, h * 0.52);
+    g.quadraticCurveTo(w * 0.28, h * 0.62, w * 0.16, h * 0.74);
+    g.stroke();
+    g.fillStyle = '#F0C4A4';
+    g.beginPath(); g.arc(w * 0.15, h * 0.76, 6, 0, TAU); g.fill();
+    const hair = g.createLinearGradient(w * 0.2, h * 0.12, w * 0.45, h * 0.5);
+    hair.addColorStop(0, '#6A4030');
+    hair.addColorStop(1, '#2A160E');
+    g.fillStyle = hair;
+    g.beginPath(); g.ellipse(w * 0.4, h * 0.32, 20, 16, -0.4, 0, TAU); g.fill();
+    g.beginPath();
+    g.moveTo(w * 0.32, h * 0.28);
+    g.quadraticCurveTo(w * 0.22, h * 0.48, w * 0.34, h * 0.58);
+    g.quadraticCurveTo(w * 0.42, h * 0.4, w * 0.48, h * 0.3);
+    g.fill();
+    const skin = g.createRadialGradient(w * 0.36, h * 0.28, 2, w * 0.4, h * 0.32, 16);
+    skin.addColorStop(0, '#FFE4C8');
+    skin.addColorStop(1, '#E0B08A');
+    g.fillStyle = skin;
+    g.beginPath(); g.ellipse(w * 0.38, h * 0.32, 13, 11, -0.45, 0, TAU); g.fill();
+    g.fillStyle = '#3A2418';
+    g.beginPath(); g.arc(w * 0.34, h * 0.32, 1.7, 0, TAU); g.arc(w * 0.41, h * 0.3, 1.7, 0, TAU); g.fill();
+    g.strokeStyle = '#C46888';
+    g.lineWidth = 1.5;
+    g.beginPath(); g.arc(w * 0.36, h * 0.36, 3.2, 0.2, Math.PI - 0.3); g.stroke();
+  }
+  function stoneBlob(g, x, y, rw, rh, pal, alpha) {
+    const grd = g.createRadialGradient(x - rw * 0.35, y - rh * 0.4, rw * 0.08, x + rw * 0.1, y + rh * 0.1, Math.max(rw, rh));
+    grd.addColorStop(0, pal.stone);
+    grd.addColorStop(0.55, pal.stoneDim);
+    grd.addColorStop(1, pal.joint);
+    g.globalAlpha = alpha;
+    g.fillStyle = grd;
+    g.beginPath();
+    g.ellipse(x, y, rw, rh, 0, 0, TAU);
+    g.fill();
+    g.globalAlpha = alpha * 0.4;
+    g.fillStyle = 'rgba(255,255,255,0.45)';
+    g.beginPath();
+    g.ellipse(x - rw * 0.28, y - rh * 0.28, rw * 0.28, rh * 0.18, -0.6, 0, TAU);
     g.fill();
   }
   function shaft(g, w, h, pal) {
-    const bg = g.createLinearGradient(0, 0, 0, h);
-    bg.addColorStop(0, pal.sky);
-    bg.addColorStop(0.45, pal.mid);
-    bg.addColorStop(1, pal.deep);
-    g.fillStyle = bg;
-    g.fillRect(0, 0, w, h);
-    const rng = mulberry32(pal.sky.charCodeAt(1) * 99 + 7);
-    for (let i = 0; i < 18; i++) {
-      const x = rng() * w, y = rng() * h, rw = 30 + rng() * 70, rh = 18 + rng() * 36;
-      g.fillStyle = rng() < 0.5 ? pal.stoneDim : pal.joint;
-      g.globalAlpha = 0.10 + rng() * 0.12;
-      g.beginPath();
-      g.ellipse(x, y, rw, rh, rng() * 0.4, 0, TAU);
-      g.fill();
+    const rng = mulberry32(pal.sky.charCodeAt(1) * 97 + 13);
+    const stones = [];
+    for (let i = 0; i < 14; i++) {
+      stones.push({
+        x: 16 + rng() * (w - 32),
+        y: rng() * h,
+        rw: 28 + rng() * 36,
+        rh: 14 + rng() * 14,
+        a: 0.62 + rng() * 0.3
+      });
+    }
+    for (const dy of [0, -h]) {
+      for (const s of stones) stoneBlob(g, s.x, s.y + dy, s.rw, s.rh, pal, s.a);
     }
     g.globalAlpha = 1;
-    g.strokeStyle = pal.moss;
-    g.lineWidth = 3;
-    g.lineCap = 'round';
-    g.globalAlpha = 0.45;
-    for (let i = 0; i < 4; i++) {
-      const x = 20 + rng() * (w - 40);
-      g.beginPath();
-      g.moveTo(x, rng() * h);
-      g.bezierCurveTo(x + 20, 40, x - 16, h * 0.4, x + 8, h * 0.7);
-      g.stroke();
-    }
-    g.globalAlpha = 1;
-    const edge = g.createLinearGradient(0, 0, w, 0);
-    edge.addColorStop(0, 'rgba(0,0,0,0.35)');
-    edge.addColorStop(0.15, 'rgba(0,0,0,0)');
-    edge.addColorStop(0.85, 'rgba(0,0,0,0)');
-    edge.addColorStop(1, 'rgba(0,0,0,0.35)');
-    g.fillStyle = edge;
-    g.fillRect(0, 0, w, h);
   }
   function wall(g, w, h, pal) {
-    const grd = g.createLinearGradient(0, 0, w, 0);
-    grd.addColorStop(0, pal.deep);
-    grd.addColorStop(0.4, pal.stoneDim);
-    grd.addColorStop(0.72, pal.stone);
-    grd.addColorStop(1, pal.joint);
-    g.fillStyle = grd;
+    const base = g.createLinearGradient(0, 0, w, 0);
+    base.addColorStop(0, pal.deep);
+    base.addColorStop(0.4, pal.stoneDim);
+    base.addColorStop(0.75, pal.stone);
+    base.addColorStop(1, pal.joint);
+    g.fillStyle = base;
     g.fillRect(0, 0, w, h);
-    const rng = mulberry32(3);
-    g.globalAlpha = 0.4;
-    for (let y = 8; y < h; y += 36) {
-      for (let x = -10; x < w; x += 28) {
-        g.fillStyle = rng() < 0.5 ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.18)';
-        pathRound(g, x + (y % 72 === 8 ? 10 : 0), y, 22, 16, 5);
+    const row = 36;
+    const rows = Math.round(h / row);
+    for (let r = 0; r < rows; r++) {
+      const y = r * row;
+      const shift = (r % 2) * 12;
+      for (let x = -18 + shift; x < w; x += 26) {
+        const face = g.createLinearGradient(x, y + 3, x + 20, y + row - 4);
+        face.addColorStop(0, 'rgba(255,255,255,0.28)');
+        face.addColorStop(0.4, pal.stone);
+        face.addColorStop(1, 'rgba(0,0,0,0.4)');
+        g.fillStyle = face;
+        pathRound(g, x, y + 3, 22, row - 8, 5);
         g.fill();
       }
     }
-    g.globalAlpha = 1;
   }
   function meadow(g, w, h) {
     const sky = g.createLinearGradient(0, 0, 0, h * 0.62);
@@ -516,8 +602,8 @@
     }
     const bg = {}, walls = {};
     Object.keys(BIO).forEach(name => {
-      bg[name] = bake(330, 420, (g, w, h) => shaft(g, w, h, BIO[name]));
-      walls[name] = bake(36, 280, (g, w, h) => wall(g, w, h, BIO[name]));
+      bg[name] = bake(330, 360, (g, w, h) => shaft(g, w, h, BIO[name]));
+      walls[name] = bake(36, 180, (g, w, h) => wall(g, w, h, BIO[name]));
     });
     return {
       bg: bg,
@@ -531,12 +617,12 @@
       lantern: bake(28, 44, lantern),
       portal: bake(180, 150, portal),
       cone: bake(220, 260, cone),
-      kiro: bake(80, 96, kiroBarrel),
-      kiroLoose: bake(52, 72, kiroLoose),
-      kiroLie: bake(150, 90, kiroLie),
-      kiroSit: bake(100, 120, kiroSit),
-      tara: bake(90, 140, (g, w, h) => tara(g, w, h, false)),
-      taraLean: bake(130, 170, (g, w, h) => tara(g, w, h, true)),
+      kiro: bake(170, 220, kiroBarrel),
+      kiroLoose: bake(112, 154, kiroLoose),
+      kiroLie: bake(240, 130, kiroLie),
+      kiroSit: bake(170, 190, kiroSit),
+      tara: bake(100, 168, (g, w, h) => tara(g, w, h, false)),
+      taraLean: bake(210, 160, (g, w, h) => tara(g, w, h, true)),
       katana: bake(40, 40, katana),
       barrelIcon: bake(36, 40, barrelIcon)
     };

@@ -33,6 +33,8 @@
     faintButtonMs: 300, pointsPerMeter: 10,     coinPoints: 10, noBarrelScoreMult: 1.5, coinDropOnKillChance: 0.45
   };
   const W = 390, BH = C.barrelH, BW = C.barrelW, TAU = Math.PI * 2;
+  const HERO_W = 170, HERO_H = 220, HERO_AY = 156, HARNESS_DY = -22;
+  const LOOSE_W = 112, LOOSE_H = 154, LOOSE_AY = 100, LOOSE_HARNESS_DY = -54;
   const KEY = { coins: 'kagewell.prototyp.coins', bestD: 'kagewell.prototyp.bestDepth', bestS: 'kagewell.prototyp.bestScore', seen: 'kagewell.prototyp.seen' };
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -659,8 +661,19 @@
     for (const c of coins) if (c.got) c.fly += dt;
   }
 
+  function harnessOf(x, y, rot, bob) {
+    const cy = y + BH / 2 + (bob || 0);
+    const ly = barrel === 'intact' ? HARNESS_DY : LOOSE_HARNESS_DY;
+    const c = Math.cos(rot || 0), s = Math.sin(rot || 0);
+    return { x: x - ly * s, y: cy + ly * c };
+  }
   function initRope() {
-    for (let i = 0; i <= SEG; i++) { rx[i] = ox[i] = px; ry[i] = oy[i] = (py * i) / SEG; }
+    const h = harnessOf(px, py, 0, 0);
+    for (let i = 0; i <= SEG; i++) {
+      const k = i / SEG;
+      rx[i] = ox[i] = lerp(px, h.x, k);
+      ry[i] = oy[i] = lerp(8, h.y, k);
+    }
   }
   function ropeStep(dt, bx, by) {
     const ax = ropeAx, ay = 8;
@@ -766,8 +779,8 @@
     bits = bits.filter(b => b.life > 0);
     scarfStep(dt);
     dustStep(dt);
-    const harness = barrel === 'intact' ? py + BH / 2 - 64 : py + BH / 2 - 58;
-    ropeStep(dt, px, harness + (sagMode === 'B' ? visSag : 0));
+    const grip = harnessOf(px, py, visualRot(), sagMode === 'B' ? visSag : 0);
+    ropeStep(dt, grip.x, grip.y);
     if (joyBack > 0 && joyFrom) {
       joyBack -= dt;
       const k = 1 - Math.max(0, joyBack) / 140;
@@ -809,7 +822,8 @@
 
   function scarfStep(dt) {
     const side = lastSide || 1;
-    const ax = px - side * 16, ay = py + BH / 2 - 22;
+    const neck = harnessOf(px, py, 0, sagMode === 'B' ? visSag : 0);
+    const ax = neck.x - side * 26, ay = neck.y - 16;
     if (!scarf[0].y) { for (let i = 0; i < scarf.length; i++) { scarf[i].x = scarf[i].ox = ax - side * i * 6; scarf[i].y = scarf[i].oy = ay + i * 2; } }
     const rest = 8;
     for (let n = 0; n < 2; n++) {
@@ -900,12 +914,27 @@
       if (biomeBlend <= 0) { biomeShown = name; biomeBlend = 1; }
     }
     drawWell.at = performance.now();
+    const palOf = (id) => (window.KWBake && KWBake.BIO && KWBake.BIO[id]) || { sky: '#16385A', mid: '#102438', deep: '#070E18' };
+    const wash = (id, alpha) => {
+      const pal = palOf(id);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      const g = ctx.createLinearGradient(0, 0, 0, visH);
+      g.addColorStop(0, pal.sky);
+      g.addColorStop(0.55, pal.mid);
+      g.addColorStop(1, pal.deep);
+      ctx.fillStyle = g;
+      ctx.fillRect(C.wall, -2, W - C.wall * 2, visH + 8);
+      ctx.restore();
+    };
+    wash(biomeShown, 1);
+    if (name !== biomeShown && biomeBlend < 1) wash(name, 1 - biomeBlend);
     const far = art.bg[biomeShown] || art.bg.moon;
     const near = art.bg[name] || far;
-    tile(far, 0.46, depth, C.wall, W - C.wall * 2);
+    tile(far, 0.55, depth, C.wall, W - C.wall * 2);
     if (near !== far && biomeBlend < 1) {
       ctx.globalAlpha = 1 - biomeBlend;
-      tile(near, 0.46, depth, C.wall, W - C.wall * 2);
+      tile(near, 0.55, depth, C.wall, W - C.wall * 2);
       ctx.globalAlpha = 1;
     }
     const wallImg = (art.walls && (art.walls[name] || art.walls.moon)) || null;
@@ -979,7 +1008,7 @@
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#7A5A32';
-    ctx.lineWidth = 5.5;
+    ctx.lineWidth = 7;
     ctx.stroke();
     ctx.strokeStyle = '#F0D7A4';
     ctx.lineWidth = 2;
@@ -1035,8 +1064,8 @@
     if (imp > 0) ctx.scale(1 + imp * 0.06, 1 - imp * 0.08);
     if (rot) ctx.rotate(rot);
     if (spr) {
-      if (barrel === 'broken') ctx.drawImage(spr, -32, -58, 64, 88);
-      else ctx.drawImage(spr, -40, -62, 80, 96);
+      if (barrel === 'broken') ctx.drawImage(spr, -LOOSE_W / 2, -LOOSE_AY, LOOSE_W, LOOSE_H);
+      else ctx.drawImage(spr, -HERO_W / 2, -HERO_AY, HERO_W, HERO_H);
     }
     if (breakFlash > 30) {
       ctx.globalAlpha = clamp((breakFlash - 30) / 40, 0, 0.9);
@@ -1305,7 +1334,11 @@
       ctx.save();
       ghosts.forEach((g, i) => {
         ctx.globalAlpha = 0.16 + i * 0.06;
-        ctx.drawImage(art.kiro, g.x - 40, g.y + BH / 2 - 62, 80, 96);
+        ctx.save();
+        ctx.translate(g.x, g.y + BH / 2);
+        ctx.rotate(swingDir * (g.t / C.swingMs) * TAU);
+        ctx.drawImage(art.kiro, -HERO_W / 2, -HERO_AY, HERO_W, HERO_H);
+        ctx.restore();
       });
       ctx.restore();
     }
@@ -1423,52 +1456,203 @@
     ctx.ellipse(a.x + kx - knobD * 0.16, a.y + ky - knobD * 0.18, knobD * 0.16, knobD * 0.1, -0.6, 0, TAU);
     ctx.fill();
   }
-  function drawTitle() {
-    if (art && art.meadow) ctx.drawImage(art.meadow, 0, 0, W, Math.max(visH, 844));
-    else { ctx.fillStyle = '#8ECBF8'; ctx.fillRect(0, 0, W, visH); }
-    const t = performance.now() / 1000;
-    const wellY = Math.min(visH * 0.42, 360);
-    ctx.fillStyle = '#6E6258';
-    ctx.beginPath();
-    ctx.ellipse(W / 2, wellY + 70, 92, 28, 0, 0, TAU);
+  function inkText(str, x, y, size, fill) {
+    font(size);
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(3, size * 0.14);
+    ctx.strokeStyle = '#2A1204';
+    ctx.strokeText(str, x, y);
+    ctx.fillStyle = 'rgba(30,12,0,0.72)';
+    ctx.fillText(str, x + 1.6, y + 2.4);
+    ctx.fillStyle = fill;
+    ctx.fillText(str, x, y);
+  }
+  function drawHut(x, ground) {
+    const y = ground - 118;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(x + 36, ground + 4, 48, 8, 0, 0, TAU); ctx.fill();
+    const wall = ctx.createLinearGradient(x, y, x + 72, y + 90);
+    wall.addColorStop(0, '#C4B09A');
+    wall.addColorStop(1, '#7A6856');
+    ctx.fillStyle = wall;
+    traceRound(x + 8, y + 28, 64, 78, 4);
     ctx.fill();
-    ctx.fillStyle = '#3A342E';
+    ctx.fillStyle = '#6A4030';
     ctx.beginPath();
-    ctx.ellipse(W / 2, wellY + 64, 70, 18, 0, 0, TAU);
+    ctx.moveTo(x, y + 36);
+    ctx.lineTo(x + 40, y - 8);
+    ctx.lineTo(x + 80, y + 36);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#5A3020';
+    ctx.beginPath();
+    ctx.moveTo(x + 6, y + 34);
+    ctx.lineTo(x + 40, y);
+    ctx.lineTo(x + 74, y + 34);
+    ctx.closePath();
+    ctx.fill();
+    if (art && art.glowWarm) {
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(art.glowWarm, x + 18, y + 40, 44, 44);
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = '#FFE2A0';
+    traceRound(x + 26, y + 48, 22, 18, 3);
+    ctx.fill();
+    ctx.strokeStyle = '#4A3020';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 37, y + 48); ctx.lineTo(x + 37, y + 66);
+    ctx.moveTo(x + 26, y + 57); ctx.lineTo(x + 48, y + 57);
+    ctx.stroke();
+    if (art && art.lantern) ctx.drawImage(art.lantern, x + 70, y + 24, 22, 34);
+  }
+  function drawStoneWell(cx, ground) {
+    const mouthY = ground - 28;
+    ctx.fillStyle = '#5C3A22';
+    traceRound(cx - 92, mouthY - 188, 16, 196, 5); ctx.fill();
+    traceRound(cx + 76, mouthY - 188, 16, 196, 5); ctx.fill();
+    const beam = ctx.createLinearGradient(cx - 110, mouthY - 140, cx + 110, mouthY - 120);
+    beam.addColorStop(0, '#6A3E1C');
+    beam.addColorStop(0.5, '#E2B56A');
+    beam.addColorStop(1, '#5A3416');
+    ctx.fillStyle = beam;
+    traceRound(cx - 108, mouthY - 196, 216, 18, 6);
     ctx.fill();
     ctx.save();
-    ctx.translate(W / 2, wellY + 64);
-    ctx.rotate(t * 1.4);
-    if (art && art.portal) ctx.drawImage(art.portal, -78, -58, 156, 116);
+    ctx.translate(cx + 84, mouthY - 158);
+    ctx.strokeStyle = '#C9A36A';
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(0, 0, 18, 0, TAU); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-15, 0); ctx.lineTo(15, 0);
+    ctx.moveTo(0, -15); ctx.lineTo(0, 15);
+    ctx.stroke();
     ctx.restore();
-    if (art && art.tara) ctx.drawImage(art.tara, 228, wellY - 10, 86, 132);
-    if (art && art.kiro) ctx.drawImage(art.kiro, 62, wellY - 8, 92, 110);
-    const pile = Math.min(14, totalCoins);
-    for (let i = 0; i < pile; i++) {
-      const spin = Math.cos(t * 3 + i);
-      drawCoinSprite(300 + (i % 5) * 16, wellY + 150 + ((i / 5) | 0) * 16, spin);
+    ctx.strokeStyle = '#E6C98A';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx + 84, mouthY - 140);
+    ctx.quadraticCurveTo(cx + 30, mouthY - 10, cx, mouthY + 4);
+    ctx.stroke();
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU;
+      const sx = cx + Math.cos(a) * 86;
+      const sy = mouthY + Math.sin(a) * 28;
+      const grd = ctx.createRadialGradient(sx - 5, sy - 4, 2, sx, sy, 18);
+      grd.addColorStop(0, '#E7E2D8');
+      grd.addColorStop(0.6, '#8E877C');
+      grd.addColorStop(1, '#4E493F');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, 18, 12, a, 0, TAU);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#10141C';
+    ctx.beginPath(); ctx.ellipse(cx, mouthY, 64, 20, 0, 0, TAU); ctx.fill();
+    const lip = ctx.createLinearGradient(cx - 70, mouthY - 10, cx + 70, mouthY + 16);
+    lip.addColorStop(0, '#6E675C');
+    lip.addColorStop(0.5, '#F0EBE2');
+    lip.addColorStop(1, '#5A544A');
+    ctx.strokeStyle = lip;
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(cx, mouthY, 64, 20, 0, 0, TAU); ctx.stroke();
+    return { x: cx, y: mouthY };
+  }
+  function drawDuskSet(ground) {
+    const sky = ctx.createLinearGradient(0, 0, 0, Math.max(ground, 1));
+    sky.addColorStop(0, '#141E36');
+    sky.addColorStop(0.42, '#3A3358');
+    sky.addColorStop(0.72, '#C47858');
+    sky.addColorStop(1, '#F0B56A');
+    ctx.fillStyle = sky;
+    ctx.fillRect(-4, -8, W + 8, visH + 16);
+    if (art && art.glowWarm) {
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(art.glowWarm, W * 0.62, 18, 150, 150);
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = '#F6E7C0';
+    ctx.beginPath(); ctx.arc(W * 0.78, 86, 26, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#1A2744';
+    ctx.beginPath(); ctx.arc(W * 0.78 + 10, 80, 22, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#2C3C5C';
+    ctx.beginPath();
+    ctx.moveTo(0, ground - 30);
+    ctx.quadraticCurveTo(W * 0.28, ground - 260, W * 0.62, ground - 70);
+    ctx.quadraticCurveTo(W * 0.82, ground + 20, W, ground - 90);
+    ctx.lineTo(W, ground + 30);
+    ctx.lineTo(0, ground + 30);
+    ctx.fill();
+    ctx.fillStyle = '#3E4E6E';
+    ctx.beginPath();
+    ctx.moveTo(0, ground - 10);
+    ctx.quadraticCurveTo(W * 0.35, ground - 90, W, ground - 16);
+    ctx.lineTo(W, ground + 20);
+    ctx.lineTo(0, ground + 20);
+    ctx.fill();
+    const grass = ctx.createLinearGradient(0, ground - 80, 0, visH + 20);
+    grass.addColorStop(0, '#4E9A52');
+    grass.addColorStop(0.35, '#2F7A40');
+    grass.addColorStop(1, '#1A4E2C');
+    ctx.fillStyle = grass;
+    ctx.beginPath();
+    ctx.moveTo(0, ground - 8);
+    ctx.quadraticCurveTo(W * 0.35, ground - 64, W * 0.7, ground - 6);
+    ctx.quadraticCurveTo(W * 0.88, ground + 16, W, ground - 18);
+    ctx.lineTo(W, visH + 30);
+    ctx.lineTo(0, visH + 30);
+    ctx.fill();
+    drawHut(W - 108, ground - 36);
+    const mouth = drawStoneWell(W * 0.5, ground);
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 14; i++) {
+      const x = 12 + (i * 29) % (W - 16);
+      const y = ground + 8 + (i % 4) * 16;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + 3, y - 10, x + 1, y - 16);
+      ctx.stroke();
     }
     if (art && art.spark) {
-      for (let i = 0; i < 10; i++) {
-        const fx = (30 + i * 36 + Math.sin(t * 0.7 + i) * 16) % 370;
-        const fy = wellY + 20 + (i * 28) % 180 + Math.sin(t * 1.3 + i) * 8;
-        ctx.globalAlpha = 0.65;
-        ctx.drawImage(art.spark, fx, fy, 10, 10);
+      const t = performance.now() / 1000;
+      for (let i = 0; i < 8; i++) {
+        const fx = (24 + i * 48 + Math.sin(t * 0.6 + i) * 14) % (W - 10);
+        const fy = ground - 180 + (i * 22) % 150 + Math.sin(t + i) * 6;
+        ctx.globalAlpha = 0.7;
+        ctx.drawImage(art.spark, fx, fy, 8, 8);
       }
       ctx.globalAlpha = 1;
     }
-    if (art && art.glowGold) {
-      ctx.globalAlpha = 0.8;
-      ctx.drawImage(art.glowGold, W / 2 - 120, 4, 240, 80);
-      ctx.globalAlpha = 1;
-    }
+    return mouth;
+  }
+  function drawTitle() {
+    const t = performance.now() / 1000;
+    const ground = viewH * 0.66;
+    const mouth = drawDuskSet(ground);
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(mouth.x, mouth.y, 58, 16, 0, 0, TAU);
+    ctx.clip();
+    ctx.translate(mouth.x, mouth.y);
+    ctx.rotate(t * 1.2);
+    if (art && art.portal) ctx.drawImage(art.portal, -74, -38, 148, 76);
+    ctx.restore();
+    if (art && art.tara) ctx.drawImage(art.tara, mouth.x + 48, ground - 176, 96, 162);
+    if (art && art.kiro) ctx.drawImage(art.kiro, mouth.x - 188, ground - 210, HERO_W, HERO_H);
+    const pile = Math.min(12, totalCoins);
+    for (let i = 0; i < pile; i++) drawCoinSprite(mouth.x - 150 + (i % 4) * 18, ground - 18 + ((i / 4) | 0) * 16, Math.cos(t * 3 + i));
     const appear = ease(clamp((performance.now() - titleAt) / 260, 0, 1));
     ctx.save();
     ctx.globalAlpha = appear;
-    ctx.translate(W / 2, 36);
-    ctx.scale(0.92 + 0.08 * appear, 0.92 + 0.08 * appear);
-    label('KAGEWELL', 0, 0, 40, '#E5B84B', 'center');
-    label('Barrel Ninja', 0, 36, 16, '#1A6A86', 'center');
+    ctx.translate(W / 2, 48);
+    ctx.scale(0.94 + 0.06 * appear, 0.94 + 0.06 * appear);
+    inkText('KAGEWELL', 0, 0, 42, '#FFD56A');
+    inkText('Barrel Ninja', 0, 34, 16, '#F4E2B0');
     ctx.restore();
     const by = viewH * 0.70;
     const bw = 260, bh = 64;
@@ -1494,23 +1678,28 @@
       ctx.fillRect(0, 0, W, visH + 40);
       ctx.globalAlpha = 1;
     }
-    if (art && art.meadow) ctx.drawImage(art.meadow, 0, 0, W, Math.max(visH, 844));
     uiNoch = { x: camX + viewW / 2 - 110, y: viewH - 78, w: 220, h: 58 };
     uiTitel = { x: camX + viewW / 2 - 70, y: viewH - 132, w: 140, h: 40 };
-    const ground = uiTitel.y - 36;
-    if (art && art.taraLean) ctx.drawImage(art.taraLean, W * 0.46, ground - 168, 130, 170);
+    const ground = uiTitel.y - 6;
+    const mouth = drawDuskSet(ground - 28);
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    ctx.translate(mouth.x, mouth.y);
+    if (art && art.portal) ctx.drawImage(art.portal, -60, -28, 120, 56);
+    ctx.restore();
     const sit = faintT > 600;
     const poseIn = ease(clamp((faintT - (sit ? 600 : 0)) / 260, 0, 1));
     ctx.save();
     ctx.globalAlpha = 0.35 + 0.65 * poseIn;
-    if (sit && art && art.kiroSit) ctx.drawImage(art.kiroSit, 28, ground - 120, 100, 120);
-    else if (art && art.kiroLie) ctx.drawImage(art.kiroLie, 16, ground - 78, 150, 90);
+    if (sit && art && art.kiroSit) ctx.drawImage(art.kiroSit, 36, ground - 188, 170, 190);
+    else if (art && art.kiroLie) ctx.drawImage(art.kiroLie, 16, ground - 118, 240, 130);
     ctx.restore();
-    const shown = Math.min(runCoins, Math.ceil(clamp((faintT - 150) / 1050, 0, 1) * runCoins));
+    if (art && art.taraLean) ctx.drawImage(art.taraLean, sit ? 108 : 78, ground - 172, 190, 170);
+    const shown = Math.min(runCoins, Math.ceil(clamp((faintT - 150) / 1050, 0, 1) * Math.max(0, runCoins)));
     if (shown > coinPop) { KWAudio.play('score_pickup', { semi: shown }); coinPop = shown; }
-    const pile = runCoins <= 0 ? 0 : Math.max(3, Math.min(16, runCoins));
+    const pile = Math.min(shown, 16);
     for (let i = 0; i < pile; i++) {
-      drawCoinSprite(36 + (i % 4) * 24, ground - 8 + ((i / 4) | 0) * 20, Math.cos(performance.now() / 200 + i));
+      drawCoinSprite(48 + (i % 4) * 22, ground - 16 - ((i / 4) | 0) * 16, Math.cos(performance.now() / 200 + i));
     }
     const word = shown === 1 ? 'Münze' : 'Münzen';
     const panel = { x: camX + 16, y: 16, w: viewW - 32, h: 92 };
