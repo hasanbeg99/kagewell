@@ -458,13 +458,20 @@
     for (const dy of [0, -h]) {
       for (const s of stones) stoneBlob(g, s.x, s.y + dy, s.rw, s.rh, pal, s.a);
     }
+    const lit = g.createLinearGradient(0, 0, w, 0);
+    lit.addColorStop(0, 'rgba(0,0,0,0.28)');
+    lit.addColorStop(0.5, 'rgba(255,255,255,0.07)');
+    lit.addColorStop(1, 'rgba(0,0,0,0.28)');
     g.globalAlpha = 1;
+    g.fillStyle = lit;
+    g.fillRect(0, 0, w, h);
   }
   function wall(g, w, h, pal) {
     const base = g.createLinearGradient(0, 0, w, 0);
     base.addColorStop(0, pal.deep);
-    base.addColorStop(0.4, pal.stoneDim);
-    base.addColorStop(0.75, pal.stone);
+    base.addColorStop(0.22, pal.joint);
+    base.addColorStop(0.62, pal.stoneDim);
+    base.addColorStop(0.86, pal.stone);
     base.addColorStop(1, pal.joint);
     g.fillStyle = base;
     g.fillRect(0, 0, w, h);
@@ -474,15 +481,50 @@
       const y = r * row;
       const shift = (r % 2) * 12;
       for (let x = -18 + shift; x < w; x += 26) {
-        const face = g.createLinearGradient(x, y + 3, x + 20, y + row - 4);
-        face.addColorStop(0, 'rgba(255,255,255,0.28)');
-        face.addColorStop(0.4, pal.stone);
-        face.addColorStop(1, 'rgba(0,0,0,0.4)');
+        const face = g.createLinearGradient(x, y + 3, x + 22, y + row - 4);
+        face.addColorStop(0, 'rgba(0,0,0,0.35)');
+        face.addColorStop(0.35, pal.stoneDim);
+        face.addColorStop(0.72, pal.stone);
+        face.addColorStop(1, 'rgba(255,255,255,0.22)');
         g.fillStyle = face;
-        pathRound(g, x, y + 3, 22, row - 8, 5);
+        pathRound(g, x, y + 3, 22, row - 8, 6);
         g.fill();
+        g.fillStyle = 'rgba(0,0,0,0.38)';
+        g.fillRect(x + 1, y + row - 7, 20, 3);
       }
+      g.fillStyle = 'rgba(0,0,0,0.45)';
+      g.fillRect(0, y + row - 2, w, 2);
     }
+    const edge = g.createLinearGradient(0, 0, w, 0);
+    edge.addColorStop(0, 'rgba(0,0,0,0.45)');
+    edge.addColorStop(0.18, 'rgba(0,0,0,0)');
+    edge.addColorStop(0.72, 'rgba(255,255,255,0)');
+    edge.addColorStop(0.9, 'rgba(255,255,255,0.16)');
+    edge.addColorStop(1, 'rgba(0,0,0,0.55)');
+    g.fillStyle = edge;
+    g.fillRect(0, 0, w, h);
+  }
+  function mist(g, w, h) {
+    const rng = mulberry32(91);
+    for (let i = 0; i < 7; i++) {
+      const x = rng() * w, y = rng() * h, r = 28 + rng() * 46;
+      const fog = g.createRadialGradient(x, y, r * 0.1, x, y, r);
+      fog.addColorStop(0, 'rgba(210,224,236,0.16)');
+      fog.addColorStop(1, 'rgba(210,224,236,0)');
+      g.fillStyle = fog;
+      g.beginPath();
+      g.ellipse(x, y, r, r * 0.42, 0, 0, TAU);
+      g.fill();
+    }
+  }
+  function softOval(g, w, h, inner, outer) {
+    const grd = g.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2);
+    grd.addColorStop(0, inner);
+    grd.addColorStop(1, outer);
+    g.fillStyle = grd;
+    g.beginPath();
+    g.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, TAU);
+    g.fill();
   }
   function meadow(g, w, h) {
     const sky = g.createLinearGradient(0, 0, 0, h * 0.62);
@@ -655,6 +697,26 @@
       coin: bake(64, 64, coin),
       glowWarm: bake(128, 128, (g, w, h) => glow(g, w, h, 'rgba(255,220,160,0.95)', 'rgba(255,160,60,0.28)')),
       spark: bake(32, 32, (g, w, h) => glow(g, w, h, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0.2)')),
+      mist: bake(80, 40, (g, w, h) => softOval(g, w, h, 'rgba(214,226,236,0.28)', 'rgba(214,226,236,0)')),
+      bottomFog: bake(390, 160, (g, w, h) => {
+        const bot = g.createLinearGradient(0, 0, 0, h);
+        bot.addColorStop(0, 'rgba(4,8,16,0)');
+        bot.addColorStop(1, 'rgba(4,8,16,0.4)');
+        g.fillStyle = bot;
+        g.fillRect(0, 0, w, h);
+      }),
+      wallGlow: bake(110, 72, (g, w, h) => softOval(g, w, h, 'rgba(255,176,80,0.6)', 'rgba(255,140,40,0)')),
+      shadow: bake(128, 40, (g, w, h) => softOval(g, w, h, 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0)')),
+      rim: bake(96, 36, (g, w, h) => softOval(g, w, h, 'rgba(159,216,255,0.7)', 'rgba(159,216,255,0)')),
+      moonGlow: bake(180, 180, (g, w, h) => glow(g, w, h, 'rgba(159,216,255,0.55)', 'rgba(159,216,255,0.12)')),
+      hillFog: bake(390, 220, (g, w, h) => {
+        const fog = g.createLinearGradient(0, 0, 0, h);
+        fog.addColorStop(0, 'rgba(18,28,48,0)');
+        fog.addColorStop(0.45, 'rgba(28,36,58,0.18)');
+        fog.addColorStop(1, 'rgba(18,28,48,0)');
+        g.fillStyle = fog;
+        g.fillRect(0, 0, w, h);
+      }),
       lantern: bake(28, 44, lantern),
       portal: bake(180, 150, portal),
       cone: bake(220, 260, cone),

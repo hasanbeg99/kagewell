@@ -90,6 +90,28 @@
     const name = decodeQ.shift();
     fetchBuf(name).then(() => { decoding = false; }, () => { decoding = false; });
   }
+  function allFiles() {
+    const names = [];
+    const keys = Object.keys(AUDIO_MAP);
+    for (let i = 0; i < keys.length; i++) {
+      const m = AUDIO_MAP[keys[i]];
+      if (m.files) { for (let j = 0; j < m.files.length; j++) names.push(m.files[j]); }
+      else if (m.file) names.push(m.file);
+    }
+    return names;
+  }
+  async function warmAll() {
+    ensure();
+    const names = allFiles();
+    for (let i = 0; i < names.length; i++) {
+      try {
+        await Promise.race([
+          fetchBuf(names[i]),
+          new Promise(res => setTimeout(res, 2000))
+        ]);
+      } catch (e) {}
+    }
+  }
   function unlock() {
     ensure();
     if (!A.ctx) return;
@@ -115,7 +137,7 @@
     if (!A.unlocked || !A.ctx || !AUDIO_MAP[key]) return;
     const file = opt.file || fileOf(key);
     const buf = A.buf[file];
-    if (!buf) { fetchBuf(file); return; }
+    if (!buf) return;
     const src = A.ctx.createBufferSource();
     const g = A.ctx.createGain();
     src.buffer = buf;
@@ -140,7 +162,7 @@
       delete A.loops[key];
       return;
     }
-    if (cur || !A.buf[file]) { if (!A.buf[file]) fetchBuf(file); return; }
+    if (cur || !A.buf[file]) return;
     const src = A.ctx.createBufferSource();
     const g = A.ctx.createGain();
     src.buffer = A.buf[file];
@@ -159,7 +181,7 @@
     if (A.musicName === name) return;
     const m = AUDIO_MAP[name];
     if (!m) return;
-    if (!A.buf[m.file]) { fetchBuf(m.file).then(() => { if (A.wantMusic === name) setMusic(name); }); return; }
+    if (!A.buf[m.file]) return;
     const t = A.ctx.currentTime, X = 1.8;
     const src = A.ctx.createBufferSource();
     const g = A.ctx.createGain();
@@ -203,6 +225,7 @@
     MAP: AUDIO_MAP, unlock: unlock, play: play, loop: loop, setMusic: setMusic,
     duckMusic: duckMusic, setMuted: setMuted, creakOk: creakOk,
     prefetch: function (names) { enqueueDecode(names); },
+    warmAll: warmAll,
     stepDecode: stepDecode,
     setRng: function (fn) { A.rng = fn; },
     get unlocked() { return A.unlocked; },

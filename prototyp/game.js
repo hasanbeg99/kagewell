@@ -65,8 +65,21 @@
   let poseCur = 'kiro-barrel-idle', poseOld = '', poseMix = 1;
   const PIVOT_DY = 48.5;
   const hit = { x: 0, y: 0, w: 58, h: 48 };
+  const pick = { x: 0, y: 0, w: 128, h: 150 };
+  function pickupBox() {
+    const pivY = py + PIVOT_DY;
+    pick.x = px - 64;
+    pick.y = pivY - 103;
+    pick.w = 128;
+    pick.h = 150;
+    return pick;
+  }
   const swingBox = { x: 0, y: 0, w: 0, h: 0 };
   const coinR = { x: 0, y: 0, w: 24, h: 24 };
+  const itemR = { x: 0, y: 0, w: 32, h: 36 };
+  const safeR = { x: 0, y: 0, w: 0, h: 0 };
+  const haz = { x: 0, y: 0, w: 0, h: 0 };
+  const spot = { x: 0, y: 0, w: 58, h: 48 };
   function halfW() { return barrel === 'broken' ? 30 : 29; }
   function boxAt(x, y, out) {
     const pivY = y + PIVOT_DY;
@@ -137,7 +150,8 @@
     } else drawBaked(name, wx, wy);
     ctx.globalAlpha = prevA;
   }
-  const KEY = { coins: 'kagewell.prototyp.coins', bestD: 'kagewell.prototyp.bestDepth', bestS: 'kagewell.prototyp.bestScore', seen: 'kagewell.prototyp.seen' };
+  const KEY = { coins: 'kagewell.prototyp.coins', bestD: 'kagewell.prototyp.bestDepth', bestS: 'kagewell.prototyp.bestScore', seen: 'kagewell.prototyp.seen', hand: 'kagewell.prototyp.hand' };
+  let handed = 'right';
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -178,7 +192,24 @@
   const ghost = [{ x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 0 }];
   let ghostN = 0, hudCoinT = 0, hudSpareT = 0;
   const washGrad = {}, washKey = {};
-  let bot = null, frameTimes = [], workTimes = [], inputLags = [], adaptDts = [], coinPop = 0;
+  let bot = null, inputLags = [], coinPop = 0;
+  const RING = 600;
+  const frameRing = new Float64Array(RING);
+  const workRing = new Float64Array(RING);
+  let ringI = 0, ringN = 0;
+  let adaptSum = 0, adaptCount = 0, adaptT0 = 0, adaptSkip = 0;
+  function armAdapt() {
+    adaptSkip = performance.now() + 2000;
+    adaptSum = 0;
+    adaptCount = 0;
+    adaptT0 = 0;
+  }
+  function copyRing(src) {
+    const out = new Array(ringN);
+    const start = ringN < RING ? 0 : ringI;
+    for (let i = 0; i < ringN; i++) out[i] = src[(start + i) % RING];
+    return out;
+  }
   const ptrs = new Map();
   const SEG = 12;
   prev.ropeX = new Float64Array(SEG + 1);
@@ -231,30 +262,42 @@
     const bw = Math.max(1, Math.round(cssW * dpr)), bh = Math.max(1, Math.round(cssH * dpr));
     if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
     cssPer = cssW / Math.max(1, viewW);
-    const s = insets();
-    const edgeX = (24 + s.l) / cssPer, edgeR = (24 + s.r) / cssPer, edgeB = (24 + s.b) / cssPer;
-    const right = camX + viewW, bottom = viewH;
+    insets();
     ringD = 64 * Math.ceil(120 / (64 * cssPer));
     knobD = 32 * Math.ceil(48 / (32 * cssPer));
-    restX = right - edgeR - ringD / 2;
-    restY = bottom - edgeB - ringD / 2;
     act.d = Math.ceil(90 / cssPer);
     act.hit = Math.ceil(110 / cssPer);
-    act.x = camX + edgeX + act.d / 2;
-    act.y = bottom - edgeB - act.d / 2;
     barrelBtn.d = Math.ceil(72 / cssPer);
     barrelBtn.hit = Math.ceil(88 / cssPer);
-    const gapBtn = Math.ceil(28 / cssPer);
-    barrelBtn.x = act.x + act.d / 2 + gapBtn + barrelBtn.d / 2;
-    barrelBtn.y = act.y;
-    if (barrelBtn.x + barrelBtn.d / 2 > restX - ringD / 2 - 8 / cssPer) barrelBtn.y = act.y - act.d / 2 - gapBtn - barrelBtn.d / 2;
-    if (joyId == null && joyBack <= 0) joyAnchor = { x: restX, y: restY };
+    layoutControls();
     const bakeKey = (viewScale * dpr).toFixed(3);
     if (rootBake() && bakeKey !== resize.bakeKey) {
       resize.bakeKey = bakeKey;
       art = rootBake().build(viewScale * dpr);
     }
     bakePoses();
+  }
+  function layoutControls() {
+    const s = insets();
+    const edgeX = (24 + s.l) / cssPer, edgeR = (24 + s.r) / cssPer, edgeB = (24 + s.b) / cssPer;
+    const right = camX + viewW, bottom = viewH;
+    const gapBtn = Math.ceil(28 / cssPer);
+    const gap = 8 / cssPer;
+    restY = bottom - edgeB - ringD / 2;
+    act.y = bottom - edgeB - act.d / 2;
+    barrelBtn.y = act.y;
+    if (handed === 'left') {
+      restX = camX + edgeX + ringD / 2;
+      act.x = right - edgeR - act.d / 2;
+      barrelBtn.x = act.x - act.d / 2 - gapBtn - barrelBtn.d / 2;
+      if (barrelBtn.x - barrelBtn.d / 2 < restX + ringD / 2 + gap) barrelBtn.y = act.y - act.d / 2 - gapBtn - barrelBtn.d / 2;
+    } else {
+      restX = right - edgeR - ringD / 2;
+      act.x = camX + edgeX + act.d / 2;
+      barrelBtn.x = act.x + act.d / 2 + gapBtn + barrelBtn.d / 2;
+      if (barrelBtn.x + barrelBtn.d / 2 > restX - ringD / 2 - gap) barrelBtn.y = act.y - act.d / 2 - gapBtn - barrelBtn.d / 2;
+    }
+    if (joyId == null && joyBack <= 0) joyAnchor = { x: restX, y: restY };
   }
   function rootBake() { return window.KWBake || null; }
   function burst(x, y, n, col, speed, life, grav) {
@@ -358,9 +401,16 @@
       return;
     }
     if (state === 'pause') {
-      if (hitRect(p, W / 2 - L(90), visH * 0.42, L(180), L(44))) { state = 'play'; KWAudio.play('ui_click'); return; }
+      if (hitRect(p, W / 2 - L(90), visH * 0.42, L(180), L(44))) { state = 'play'; armAdapt(); KWAudio.play('ui_click'); return; }
       if (hitRect(p, W / 2 - L(90), visH * 0.52, L(180), L(44))) { KWAudio.setMuted(!KWAudio.muted); KWAudio.play('ui_click'); return; }
       if (hitRect(p, W / 2 - L(90), visH * 0.62, L(180), L(44))) { sagMode = sagMode === 'B' ? 'A' : 'B'; KWAudio.play('ui_click'); return; }
+      if (hitRect(p, W / 2 - L(110), visH * 0.72, L(220), L(44))) {
+        handed = handed === 'left' ? 'right' : 'left';
+        store.set(KEY.hand, handed);
+        layoutControls();
+        KWAudio.play('ui_click');
+        return;
+      }
       return;
     }
     if (state === 'portal') { portalT = portalLen; }
@@ -368,10 +418,10 @@
     if (hitCircle(p, { x: W - L(36), y: L(28) }, L(22))) { state = 'pause'; pauseAt = performance.now(); KWAudio.duckMusic(0.35, 0.2); KWAudio.play('ui_click'); return; }
     if (hitCircle(p, { x: W - L(78), y: L(28) }, L(18))) { KWAudio.setMuted(!KWAudio.muted); KWAudio.play('ui_click'); return; }
     let role = 'none';
-    const right = p.x >= W / 2 && p.y > hudBottom;
-    if (!right && barrelBtn.show && hitCircle(p, barrelBtn, (barrelBtn.hit || barrelBtn.d) / 2)) role = 'barrel';
-    else if (!right && hitCircle(p, act, act.hit / 2)) role = 'action';
-    else if (right && joyId == null) role = 'joy';
+    const joySide = (handed === 'left' ? p.x < W / 2 : p.x >= W / 2) && p.y > hudBottom;
+    if (!joySide && barrelBtn.show && hitCircle(p, barrelBtn, (barrelBtn.hit || barrelBtn.d) / 2)) role = 'barrel';
+    else if (!joySide && hitCircle(p, act, act.hit / 2)) role = 'action';
+    else if (joySide && joyId == null) role = 'joy';
     ptrs.set(e.pointerId, { role: role, x: p.x, y: p.y });
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     if (role === 'joy') {
@@ -431,6 +481,7 @@
     seenRun = true;
     resetRun();
     state = 'portal';
+    armAdapt();
     portalT = 0;
     scrollV = C.portalScroll;
   }
@@ -625,17 +676,37 @@
     });
   }
   function aliveAttacks() {
-    return ents.filter(e => e.alive && (e.state === 'windup' || e.state === 'lunge' || e.state === 'hold' || e.state === 'dive' || e.state === 'cut' || e.state === 'grow')).length;
+    let n = 0;
+    for (let i = 0; i < ents.length; i++) {
+      const e = ents[i];
+      if (e.alive && (e.state === 'windup' || e.state === 'lunge' || e.state === 'hold' || e.state === 'dive' || e.state === 'cut' || e.state === 'grow')) n++;
+    }
+    return n;
   }
-  function hasSafe(extra) {
-    const boxes = ents.filter(e => e.alive && (e.state === 'lunge' || e.state === 'hold' || (e.kind === 'hazard' && e.ext > 20))).map(hazardBox).concat(extra || []);
+  function creepCount() {
+    let n = 0;
+    for (let i = 0; i < ents.length; i++) if (ents[i].alive && ents[i].kind === 'creep') n++;
+    return n;
+  }
+  function hasSafe(ex, ey, ew, eh) {
     const side = 100, up = 90, down = 140;
-    const spots = [[px - side, py], [px + side, py], [px, py - up], [px, py + down]];
-    return spots.some(s => {
-      const x = clamp(s[0], minX(), maxX()), y = clamp(s[1], C.barrelTopMin, playBottom());
-      const b = boxAt(x, y, hit);
-      return !boxes.some(h => overlap(b, h));
-    });
+    const bottom = playBottom();
+    for (let s = 0; s < 4; s++) {
+      const sx = s === 0 ? px - side : s === 1 ? px + side : px;
+      const sy = s === 2 ? py - up : s === 3 ? py + down : py;
+      const x = clamp(sx, minX(), maxX()), y = clamp(sy, C.barrelTopMin, bottom);
+      boxAt(x, y, spot);
+      if (ew) { safeR.x = ex; safeR.y = ey; safeR.w = ew; safeR.h = eh; if (overlap(spot, safeR)) continue; }
+      let blocked = false;
+      for (let i = 0; i < ents.length; i++) {
+        const e = ents[i];
+        if (!e.alive) continue;
+        if (!(e.state === 'lunge' || e.state === 'hold' || (e.kind === 'hazard' && e.ext > 20))) continue;
+        if (overlap(spot, hazardBox(e))) { blocked = true; break; }
+      }
+      if (!blocked) return true;
+    }
+    return false;
   }
   function overlap(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
   function hazardBox(e) {
@@ -643,14 +714,14 @@
       const inner = e.side < 0 ? C.wall : W - C.wall;
       const inset = 24 + e.ext;
       const x = e.side < 0 ? inner + inset : inner - inset;
-      return { x: x - 22, y: e.y - 16, w: 44, h: 32 };
-    }
-    if (e.kind === 'hazard') {
+      haz.x = x - 22; haz.y = e.y - 16; haz.w = 44; haz.h = 32;
+    } else if (e.kind === 'hazard') {
       const inner = e.side < 0 ? C.wall : W - C.wall;
-      const x = e.side < 0 ? inner : inner - e.ext;
-      return { x: x, y: e.y - 16, w: e.ext, h: 32 };
+      haz.x = e.side < 0 ? inner : inner - e.ext; haz.y = e.y - 16; haz.w = e.ext; haz.h = 32;
+    } else {
+      haz.x = e.x - 16; haz.y = e.y - 14; haz.w = 32; haz.h = 28;
     }
-    return { x: e.x - 16, y: e.y - 14, w: 32, h: 28 };
+    return haz;
   }
   function updateEnts(dt) {
     for (const e of ents) {
@@ -669,7 +740,7 @@
         }
         else if (e.state === 'windup' && e.t >= e.wind) {
           const reach = 140;
-          if (hasSafe([{ x: (e.side < 0 ? C.wall : W - C.wall - reach), y: e.y - 16, w: reach, h: 32 }])) {
+          if (hasSafe(e.side < 0 ? C.wall : W - C.wall - reach, e.y - 16, reach, 32)) {
             e.state = 'lunge'; e.t = 0; e.reach = reach; KWAudio.play('swipe');
           } else e.t = e.wind - 300;
         } else if (e.state === 'lunge') {
@@ -705,7 +776,12 @@
         if (Math.hypot(e.x - px, e.y - (py - 0.18 * BH)) < C.swordR) { /* vulnerable: swordHits handles it */ }
       }
     }
-    ents = ents.filter(e => e.y > -160 && e.y < visH + 200 && (e.alive || e.t < 600));
+    let keep = 0;
+    for (let i = 0; i < ents.length; i++) {
+      const e = ents[i];
+      if (e.y > -160 && e.y < visH + 200 && (e.alive || e.t < 600)) ents[keep++] = e;
+    }
+    ents.length = keep;
   }
   function spawner(dt) {
     if (NO_SPAWN || state !== 'play') return;
@@ -731,7 +807,7 @@
       if (waveN === 1) { weights.fledermaus = 0; weights.stacheln = 0; weights.seilschneider = 0; }
       const k = choice(weights);
       const y = visH + 30;
-      if (k === 'krabbler' && ents.filter(e => e.kind === 'creep' && e.alive).length < (m < 40 ? 2 : m < 150 ? 3 : 4)) spawnCreep(y);
+      if (k === 'krabbler' && creepCount() < (m < 40 ? 2 : m < 150 ? 3 : 4)) spawnCreep(y);
       else if (k === 'fledermaus' && m >= 20) spawnBat(80 + rng() * 200);
       else if (k === 'stacheln' && m >= 30) spawnHazard(y);
       else if (k === 'seilschneider' && m >= 70 && !ents.some(e => e.kind === 'cutter' && e.alive) && playMs > knotLock) spawnCutter();
@@ -762,7 +838,7 @@
     void teach;
   }
   function updateCoins(dt) {
-    const body = bodyBox();
+    const body = pickupBox();
     for (let i = 0; i < coins.length; i++) {
       const c = coins[i];
       if (c.got) continue;
@@ -917,7 +993,8 @@
     if (state === 'play') { spawner(dt); updateEnts(dt); updateCoins(dt); }
     if (pickup) {
       pickup.t += dt; const sy = pickup.worldY - depthPx;
-      if (overlap(bodyBox(), { x: pickup.x - 16, y: sy - 18, w: 32, h: 36 })) {
+      itemR.x = pickup.x - 16; itemR.y = sy - 18; itemR.w = 32; itemR.h = 36;
+      if (overlap(pickupBox(), itemR)) {
         if (spares < C.spareMax) { spares++; hudSpareT = 1; KWAudio.play('barrel_pickup'); }
         lastPickupM = depthM(); pickupRoll = -1; pickup = null;
       } else if (sy < -40) pickup = null;
@@ -956,7 +1033,7 @@
     if (state === 'portal') {
       portalT += dtMs;
       updatePlay(dtMs);
-      if (portalT >= portalLen) { state = 'play'; scrollV = Math.max(scrollV, C.portalScroll); }
+      if (portalT >= portalLen) { state = 'play'; armAdapt(); scrollV = Math.max(scrollV, C.portalScroll); }
       return;
     }
     if (state === 'play') updatePlay(dtMs);
@@ -1029,8 +1106,12 @@
     const s = Math.floor((depth / C.pxPerMeter) / 100) % 4;
     return ['moon', 'moss', 'ember', 'crystal'][(s + 4) % 4];
   }
+  let fontPx = -1;
   function font(size) {
-    ctx.font = '700 ' + size + 'px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    if (size !== fontPx) {
+      fontPx = size;
+      ctx.font = '700 ' + size + 'px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    }
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
   }
@@ -1102,10 +1183,21 @@
     if (name !== biomeShown && biomeBlend < 1) wash(name, 1 - biomeBlend);
     const far = art.bg[biomeShown] || art.bg.moon;
     const near = art.bg[name] || far;
-    tile(far, 0.55, depth, C.wall, W - C.wall * 2);
+    tile(far, 0.32, depth, C.wall, W - C.wall * 2);
     if (near !== far && biomeBlend < 1) {
       ctx.globalAlpha = 1 - biomeBlend;
-      tile(near, 0.55, depth, C.wall, W - C.wall * 2);
+      tile(near, 0.32, depth, C.wall, W - C.wall * 2);
+      ctx.globalAlpha = 1;
+    }
+    if (art.mist) {
+      const stepM = 210;
+      const m0 = (depth * 0.5 / stepM) | 0;
+      ctx.globalAlpha = 0.8;
+      for (let i = m0 - 1; i < m0 + 6; i++) {
+        const sy = i * stepM - depth * 0.5;
+        if (sy < -50 || sy > visH) continue;
+        ctx.drawImage(art.mist, C.wall + 24 + ((i * 83) & 255) % 200, sy, 86, 40);
+      }
       ctx.globalAlpha = 1;
     }
     const wallImg = (art.walls && (art.walls[name] || art.walls.moon)) || null;
@@ -1156,13 +1248,21 @@
       const left = i % 2 === 0;
       const lx = left ? 8 : W - 36;
       const flick = 0.75 + 0.25 * Math.sin(performance.now() / 160 + i);
-      if (art.glowWarm) {
-        ctx.globalAlpha = 0.55 * flick;
-        ctx.drawImage(art.glowWarm, lx - 34, sy - 28, 96, 96);
+      if (art.wallGlow) {
+        ctx.globalAlpha = 0.8 * flick;
+        if (left) ctx.drawImage(art.wallGlow, C.wall - 6, sy - 16, 100, 64);
+        else {
+          ctx.save();
+          ctx.translate(W - C.wall + 6, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(art.wallGlow, 0, sy - 16, 100, 64);
+          ctx.restore();
+        }
         ctx.globalAlpha = 1;
       }
       if (art.lantern) ctx.drawImage(art.lantern, lx, sy, 26, 40);
     }
+    if (art.bottomFog) ctx.drawImage(art.bottomFog, 0, visH - 150, W, 150);
     if (art.spark) {
       for (let i = 0; i < dust.length; i++) {
         const d = dust[i];
@@ -1239,10 +1339,22 @@
     ctx.beginPath();
     ctx.rect(C.wall - 1, -80, W - C.wall * 2 + 2, visH + 160);
     ctx.clip();
-    if (pop !== 1) {
-      ctx.translate(x, y);
-      ctx.scale(pop, pop);
-      ctx.translate(-x, -y);
+    if (art && art.shadow) {
+      const lean = (x - W * 0.5) * 0.08;
+      ctx.globalAlpha = 0.5;
+      ctx.drawImage(art.shadow, x - 36 + lean, y + 14, 72, 22);
+      ctx.globalAlpha = 1;
+    }
+    if (art && art.rim) {
+      ctx.globalAlpha = 0.38;
+      ctx.drawImage(art.rim, x - 32, y - 64, 64, 28);
+      ctx.globalAlpha = 1;
+    }
+    const sq = barrel === 'intact' ? duckT / C.duckMs : 0;
+    if (pop !== 1 || sq > 0.02) {
+      ctx.translate(x, y + 20);
+      ctx.scale(pop * (1 + sq * 0.07), pop * (1 - sq * 0.05));
+      ctx.translate(-x, -(y + 20));
     }
     if (hidden) ctx.globalAlpha *= 0.45;
     if (poseOld && poseMix < 1) drawPoseAt(poseOld, x, y, 1 - poseMix);
@@ -1648,10 +1760,7 @@
       ctx.stroke();
     }
     if (barrelBtn.show) {
-      const bg = ctx.createRadialGradient(barrelBtn.x - 8, barrelBtn.y - 10, 4, barrelBtn.x, barrelBtn.y, barrelBtn.d / 2);
-      bg.addColorStop(0, '#A86A3A');
-      bg.addColorStop(1, '#3A2214');
-      disc(barrelBtn.x, barrelBtn.y, barrelBtn.d / 2, bg, '#FFD84A');
+      disc(barrelBtn.x, barrelBtn.y, barrelBtn.d / 2, '#6A3A1C', '#FFD84A');
       if (art && art.barrelIcon) ctx.drawImage(art.barrelIcon, barrelBtn.x - 14, barrelBtn.y - 16, 28, 32);
     }
     disc(a.x + kx, a.y + ky, knobD / 2, '#F7FAFF', '#9FB0C6');
@@ -1697,8 +1806,8 @@
     ctx.closePath();
     ctx.fill();
     if (art && art.glowWarm) {
-      ctx.globalAlpha = 0.55;
-      ctx.drawImage(art.glowWarm, x + 18, y + 40, 44, 44);
+      ctx.globalAlpha = 0.7;
+      ctx.drawImage(art.glowWarm, x + 8, y + 28, 70, 70);
       ctx.globalAlpha = 1;
     }
     ctx.fillStyle = '#FFE2A0';
@@ -1815,6 +1924,11 @@
     ctx.moveTo(0, -11); ctx.lineTo(0, 11);
     ctx.stroke();
     ctx.restore();
+    if (art && art.shadow) {
+      ctx.globalAlpha = 0.4;
+      ctx.drawImage(art.shadow, cx - 70, mouthY + 18, 140, 28);
+      ctx.globalAlpha = 1;
+    }
     drawWellRim(cx, mouthY);
     if (s !== 1) ctx.restore();
     const world = (y) => ground + (y - ground) * s;
@@ -1832,8 +1946,13 @@
     sky.addColorStop(1, '#F0B56A');
     ctx.fillStyle = sky;
     ctx.fillRect(-4, -8, W + 8, visH + 16);
+    if (art && art.moonGlow) {
+      ctx.globalAlpha = 0.9;
+      ctx.drawImage(art.moonGlow, W * 0.78 - 90, 86 - 80, 180, 180);
+      ctx.globalAlpha = 1;
+    }
     if (art && art.glowWarm) {
-      ctx.globalAlpha = 0.85;
+      ctx.globalAlpha = 0.45;
       ctx.drawImage(art.glowWarm, W * 0.62, 18, 150, 150);
       ctx.globalAlpha = 1;
     }
@@ -1856,6 +1975,11 @@
     ctx.lineTo(W, ground + 20);
     ctx.lineTo(0, ground + 20);
     ctx.fill();
+    if (art && art.hillFog) {
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(art.hillFog, 0, ground - 250, W, 200);
+      ctx.globalAlpha = 1;
+    }
     const grass = ctx.createLinearGradient(0, ground - 80, 0, visH + 20);
     grass.addColorStop(0, '#4E9A52');
     grass.addColorStop(0.35, '#2F7A40');
@@ -1918,6 +2042,12 @@
     ctx.moveTo(mouth.pulleyX, mouth.pulleyY);
     ctx.lineTo(barrelX, ropeY);
     ctx.stroke();
+    if (art && art.shadow) {
+      ctx.globalAlpha = 0.4;
+      ctx.drawImage(art.shadow, barrelX - 28, barrelY + 22, 56, 16);
+      ctx.drawImage(art.shadow, mouth.x + 122 - 26, ground - 6, 52, 16);
+      ctx.globalAlpha = 1;
+    }
     drawChar('kiro-barrel-title', barrelX, barrelY, SPRITE_SCALE, 1);
     drawChar('tara-winch-ready', mouth.x + 122, ground, SPRITE_SCALE, 1);
     const pile = Math.min(12, totalCoins);
@@ -1971,6 +2101,14 @@
     ctx.restore();
     const sit = faintT > 700;
     const poseIn = ease(clamp(faintT / 280, 0, 1));
+    if (art && art.shadow) {
+      ctx.globalAlpha = 0.42;
+      if (sit) {
+        ctx.drawImage(art.shadow, 176 - 50, ground - 4, 100, 20);
+        ctx.drawImage(art.shadow, 268 - 28, ground - 4, 56, 16);
+      } else ctx.drawImage(art.shadow, 150, ground - 2, 130, 22);
+      ctx.globalAlpha = 1;
+    }
     ctx.save();
     ctx.globalAlpha = 0.4 + 0.6 * poseIn;
     if (sit) {
@@ -2031,6 +2169,8 @@
     label(KWAudio.muted ? 'Ton an' : 'Ton aus', W / 2, visH * 0.52 + L(22), L(16), '#FFF8C4', 'center');
     pill(W / 2 - L(90), visH * 0.62, L(180), L(44), '#10182C', '#FFD84A');
     label('Sag ' + sagMode, W / 2, visH * 0.62 + L(22), L(16), '#FFF8C4', 'center');
+    pill(W / 2 - L(110), visH * 0.72, L(220), L(44), '#10182C', '#FFD84A');
+    label('Steuerung: ' + (handed === 'left' ? 'Linkshänder' : 'Rechtshänder'), W / 2, visH * 0.72 + L(22), L(14), '#FFF8C4', 'center');
     ctx.restore();
   }
   function render(alpha) {
@@ -2094,24 +2234,28 @@
     if (dt < 0) dt = 0;
     const clamped = dt > CFG.maxFrameDt ? CFG.maxFrameDt : dt;
     integrate(clamped);
-    if (state !== 'play' && window.KWAudio && KWAudio.stepDecode) KWAudio.stepDecode();
     render(acc / CFG.step);
     if (state === 'play') {
       const wallMs = dt * 1000;
-      frameTimes.push(wallMs);
-      if (frameTimes.length > 12000) frameTimes.shift();
-      workTimes.push(performance.now() - t0);
-      if (workTimes.length > 4000) workTimes.shift();
-      adaptDts.push(clamped);
-      if (adaptDts.length > 120) adaptDts.shift();
-      if (adaptDts.length >= 120 && adaptN < 2 && dprLimit > CFG.dprMin) {
-        let sum = 0;
-        for (let i = 0; i < adaptDts.length; i++) sum += adaptDts[i];
-        if (sum / adaptDts.length > 1 / 40) {
-          dprLimit = Math.max(CFG.dprMin, dprLimit - 0.5);
-          adaptN++;
-          adaptDts.length = 0;
-          resize();
+      frameRing[ringI] = wallMs;
+      workRing[ringI] = performance.now() - t0;
+      ringI = (ringI + 1) % RING;
+      if (ringN < RING) ringN++;
+      const nowMs = performance.now();
+      if (playMs < 2000 || nowMs < adaptSkip || dprLimit <= CFG.dprMin) {
+        adaptSum = 0; adaptCount = 0; adaptT0 = 0;
+      } else {
+        if (!adaptT0) adaptT0 = nowMs;
+        adaptSum += wallMs;
+        adaptCount++;
+        if (nowMs - adaptT0 >= 3000 && adaptCount >= 40) {
+          const avg = adaptSum / adaptCount;
+          adaptSum = 0; adaptCount = 0; adaptT0 = 0;
+          if (avg > 22) {
+            dprLimit = Math.max(CFG.dprMin, Math.round((dprLimit - 0.5) * 2) / 2);
+            armAdapt();
+            resize();
+          }
         }
       }
     }
@@ -2164,8 +2308,8 @@
           cssW: cssW, cssH: cssH, smoothing: ctx.imageSmoothingEnabled !== false
         };
       },
-      get frameTimes() { return frameTimes.slice(); },
-      get workTimes() { return workTimes.slice(); },
+      get frameTimes() { return copyRing(frameRing); },
+      get workTimes() { return copyRing(workRing); },
       get runCoins() { return runCoins; },
       get coinsN() { return coins.length; },
       get totalCoins() { return totalCoins; },
@@ -2215,13 +2359,12 @@
       }
     };
   }
-  function onShow() { last = -1; acc = 0; poseBakeKey = ''; resize(); }
+  function onShow() { last = -1; acc = 0; poseBakeKey = ''; armAdapt(); resize(); }
   async function boot() {
     titleAt = performance.now();
     await loadCharImages();
-    if (window.KWAudio && KWAudio.prefetch) {
-      KWAudio.prefetch(['ui_confirm', 'portal_enter', 'sword_slash', 'music_calm_loop', 'ambience_well_loop', 'score_pickup', 'barrel_break', 'player_hit', 'tara_wake', 'meadow_ambience_loop']);
-    }
+    if (window.KWAudio && KWAudio.warmAll) { try { await KWAudio.warmAll(); } catch (e) {} }
+    handed = store.get(KEY.hand, 'right') === 'left' ? 'left' : 'right';
     totalCoins = store.get(KEY.coins, 0) || 0;
     bestD = store.get(KEY.bestD, 0) || 0;
     bestS = store.get(KEY.bestS, 0) || 0;
