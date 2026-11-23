@@ -1508,7 +1508,14 @@
     ctx.stroke();
     if (art && art.lantern) ctx.drawImage(art.lantern, x + 70, y + 24, 22, 34);
   }
-  function drawStoneWell(cx, ground) {
+  function drawStoneWell(cx, ground, scale) {
+    const s = scale || 1;
+    if (s !== 1) {
+      ctx.save();
+      ctx.translate(cx, ground);
+      ctx.scale(s, s);
+      ctx.translate(-cx, -ground);
+    }
     const mouthY = ground - 28;
     ctx.fillStyle = '#5C3A22';
     traceRound(cx - 92, mouthY - 188, 16, 196, 5); ctx.fill();
@@ -1559,9 +1566,14 @@
     ctx.strokeStyle = lip;
     ctx.lineWidth = 4;
     ctx.beginPath(); ctx.ellipse(cx, mouthY, 64, 20, 0, 0, TAU); ctx.stroke();
-    return { x: cx, y: mouthY };
+    if (s !== 1) ctx.restore();
+    return { x: cx, y: ground - 28 * s };
   }
-  function drawDuskSet(ground) {
+  function drawDuskSet(ground, opt) {
+    opt = opt || {};
+    const hutX = opt.hutX == null ? W - 108 : opt.hutX;
+    const wellX = opt.wellX == null ? W * 0.5 : opt.wellX;
+    const wellScale = opt.wellScale || 1;
     const sky = ctx.createLinearGradient(0, 0, 0, Math.max(ground, 1));
     sky.addColorStop(0, '#141E36');
     sky.addColorStop(0.42, '#3A3358');
@@ -1605,8 +1617,8 @@
     ctx.lineTo(W, visH + 30);
     ctx.lineTo(0, visH + 30);
     ctx.fill();
-    drawHut(W - 108, ground - 36);
-    const mouth = drawStoneWell(W * 0.5, ground);
+    drawHut(hutX, ground - 36);
+    const mouth = drawStoneWell(wellX, ground, wellScale);
     ctx.strokeStyle = 'rgba(255,255,255,0.28)';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
@@ -1680,26 +1692,38 @@
     }
     uiNoch = { x: camX + viewW / 2 - 110, y: viewH - 78, w: 220, h: 58 };
     uiTitel = { x: camX + viewW / 2 - 70, y: viewH - 132, w: 140, h: 40 };
-    const ground = uiTitel.y - 6;
-    const mouth = drawDuskSet(ground - 28);
+    const ground = viewH * 0.58;
+    const wellScale = 0.46;
+    const mouth = drawDuskSet(ground, { wellX: 274, hutX: W - 68, wellScale: wellScale });
     ctx.save();
-    ctx.globalAlpha = 0.4;
-    ctx.translate(mouth.x, mouth.y);
-    if (art && art.portal) ctx.drawImage(art.portal, -60, -28, 120, 56);
+    ctx.beginPath();
+    ctx.ellipse(mouth.x, mouth.y, 64 * wellScale, 18 * wellScale, 0, 0, TAU);
+    ctx.clip();
+    ctx.globalAlpha = 0.45;
+    if (art && art.portal) ctx.drawImage(art.portal, mouth.x - 36, mouth.y - 18, 72, 36);
     ctx.restore();
     const sit = faintT > 600;
     const poseIn = ease(clamp((faintT - (sit ? 600 : 0)) / 260, 0, 1));
+    const kiro = sit
+      ? { x: 16, y: ground - 108, w: 132, h: 106 }
+      : { x: 6, y: ground - 58, w: 124, h: 58 };
     ctx.save();
     ctx.globalAlpha = 0.35 + 0.65 * poseIn;
-    if (sit && art && art.kiroSit) ctx.drawImage(art.kiroSit, 36, ground - 188, 170, 190);
-    else if (art && art.kiroLie) ctx.drawImage(art.kiroLie, 16, ground - 118, 240, 130);
+    if (sit && art && art.kiroSit) ctx.drawImage(art.kiroSit, kiro.x, kiro.y, kiro.w, kiro.h);
+    else if (art && art.kiroLie) ctx.drawImage(art.kiroLie, kiro.x, kiro.y, kiro.w, kiro.h);
     ctx.restore();
-    if (art && art.taraLean) ctx.drawImage(art.taraLean, sit ? 108 : 78, ground - 172, 190, 170);
+    if (art && art.taraLean) ctx.drawImage(art.taraLean, 154, ground - 100, 68, 96);
     const shown = Math.min(runCoins, Math.ceil(clamp((faintT - 150) / 1050, 0, 1) * Math.max(0, runCoins)));
     if (shown > coinPop) { KWAudio.play('score_pickup', { semi: shown }); coinPop = shown; }
-    const pile = Math.min(shown, 16);
+    const pile = Math.min(shown, 12);
     for (let i = 0; i < pile; i++) {
-      drawCoinSprite(48 + (i % 4) * 22, ground - 16 - ((i / 4) | 0) * 16, Math.cos(performance.now() / 200 + i));
+      const cx = 96 + (i % 3) * 16;
+      const cy = ground + 6 - ((i / 3) | 0) * 12;
+      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      ctx.beginPath();
+      ctx.ellipse(cx, ground + 16, 11, 4, 0, 0, TAU);
+      ctx.fill();
+      drawCoinSprite(cx, cy, Math.cos(performance.now() / 200 + i));
     }
     const word = shown === 1 ? 'Münze' : 'Münzen';
     const panel = { x: camX + 16, y: 16, w: viewW - 32, h: 92 };
