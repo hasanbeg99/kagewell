@@ -16,7 +16,7 @@
   }
   let rng = mulberry32(seed0 || 1);
   const C = {
-    logicalW: 390, logicalH: 844, wall: 30, barrelW: 64, barrelH: 72,
+    logicalW: 390, logicalH: 844, wall: 30, barrelW: 86, barrelH: 97,
     barrelTopMin: 150, barrelTopMax: 700, pxPerMeter: 16, wallContactPx: 12,
     inputStart: 0.6, inputFullMs: 100, inputReleaseMs: 80, actionBufferMs: 120,
     hysteresisDeg: 15,
@@ -34,10 +34,11 @@
   };
   const W = 390, BH = C.barrelH, BW = C.barrelW, TAU = Math.PI * 2;
   const SPRITE_SCALE = 1 / 3;
-  const FAINT_SCALE = 0.58;
+  const PLAY_SCALE = SPRITE_SCALE * 1.35;
+  const FAINT_SCALE = 0.66;
   const CHAR_PIV = {
     'kiro-barrel-idle': { c: [240, 288], p: [120, 206], rope: 176 },
-    'kiro-barrel-title': { c: [240, 288], p: [120, 196], rope: 166 },
+    'kiro-barrel-title': { c: [240, 288], p: [120, 196], rope: 18 },
     'kiro-barrel-swing': { c: [240, 288], p: [120, 205], rope: 174 },
     'kiro-barrel-slash': { c: [240, 288], p: [120, 211], rope: 180 },
     'kiro-barrel-duck': { c: [240, 288], p: [120, 220], rope: 196 },
@@ -429,7 +430,7 @@
   }
   function swordHits() {
     const sweep = slashPhase === 'recover' ? 1 : ease(clamp(slashT / C.swordSweepMs, 0, 1));
-    const pivotY = py - 0.18 * BH;
+    const pivotY = py + BH / 2 - 34;
     const rad = 76;
     const extra = Math.atan2(0.28 * BH, rad);
     const start = -Math.PI / 2;
@@ -716,7 +717,7 @@
     const cy = y + BH / 2 + (bob || 0);
     const sx = x + barrelSway();
     if (!spec) return { x: sx, y: cy - 10 };
-    const top = ((spec.rope != null ? spec.rope : spec.p[1]) - spec.p[1]) * SPRITE_SCALE;
+    const top = ((spec.rope != null ? spec.rope : spec.p[1]) - spec.p[1]) * PLAY_SCALE;
     return { x: sx, y: cy + top };
   }
   function initRope() {
@@ -1112,11 +1113,14 @@
     const hidden = barrel === 'broken' && invuln > 0 && ((invuln / 70) | 0) % 2 === 0;
     const pop = breakPop > 0 ? 1 + Math.sin(breakPop * Math.PI) * 0.16 : 1;
     ctx.save();
+    ctx.beginPath();
+    ctx.rect(C.wall - 1, -80, W - C.wall * 2 + 2, visH + 160);
+    ctx.clip();
     ctx.translate(x, y + BH / 2 + bob);
     if (pop !== 1) ctx.scale(pop, pop);
     if (hidden) ctx.globalAlpha = 0.45;
     if (spec && charImg[pose]) {
-      const s = SPRITE_SCALE;
+      const s = PLAY_SCALE;
       ctx.drawImage(charImg[pose], -spec.p[0] * s, -spec.p[1] * s, spec.c[0] * s, spec.c[1] * s);
     }
     if (breakFlash > 40) {
@@ -1137,32 +1141,24 @@
     const y = lerpA(prev.py, py, alpha);
     const a0 = -Math.PI / 2;
     const a1 = slashDir > 0 ? a0 + (Math.PI / 2) * sweep : a0 - (Math.PI / 2) * sweep;
-    const cx = x, cy = y - 0.18 * BH;
+    const cx = x, cy = y + BH / 2 - 34;
+    const rad = 48;
     ctx.save();
+    ctx.beginPath();
+    ctx.rect(C.wall - 1, -80, W - C.wall * 2 + 2, visH + 160);
+    ctx.clip();
     ctx.translate(cx, cy);
     ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(28,168,217,0.45)';
-    ctx.lineWidth = 26;
+    ctx.strokeStyle = 'rgba(28,168,217,0.4)';
+    ctx.lineWidth = 14;
     ctx.beginPath();
-    ctx.arc(0, 0, 72, a0, a1, slashDir < 0);
+    ctx.arc(0, 0, rad, a0, a1, slashDir < 0);
     ctx.stroke();
     ctx.strokeStyle = '#4FF0FF';
-    ctx.lineWidth = 10;
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(0, 0, 72, a0, a1, slashDir < 0);
+    ctx.arc(0, 0, rad, a0, a1, slashDir < 0);
     ctx.stroke();
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(0, 0, 72, a0, a1, slashDir < 0);
-    ctx.stroke();
-    ctx.rotate(a1);
-    ctx.fillStyle = '#F4FBFF';
-    traceRound(18, -3, 46, 6, 3);
-    ctx.fill();
-    ctx.fillStyle = '#E0A868';
-    traceRound(8, -4, 12, 8, 2);
-    ctx.fill();
     ctx.restore();
   }
   function drawCreep(e, alpha) {
@@ -1384,7 +1380,7 @@
     for (const e of ents) drawEnt(e, alpha);
     if (swingPhase === 'fly' && ghosts.length && charImg['kiro-barrel-swing']) {
       const spec = CHAR_PIV['kiro-barrel-swing'];
-      const s = SPRITE_SCALE;
+      const s = PLAY_SCALE;
       ghosts.forEach((g, i) => {
         ctx.save();
         ctx.globalAlpha = 0.14 + i * 0.05;
@@ -1571,6 +1567,76 @@
     ctx.stroke();
     if (art && art.lantern) ctx.drawImage(art.lantern, x + 70, y + 24, 22, 34);
   }
+  function drawWellRim(cx, mouthY) {
+    const rx = 76, ry = 22;
+    ctx.fillStyle = 'rgba(28,22,16,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(cx, mouthY + 34, rx - 8, 9, 0, 0, TAU);
+    ctx.fill();
+    const body = ctx.createLinearGradient(cx - rx, mouthY, cx + rx, mouthY);
+    body.addColorStop(0, '#4E4338');
+    body.addColorStop(0.5, '#8A7966');
+    body.addColorStop(1, '#3C342C');
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.moveTo(cx - rx + 6, mouthY + 4);
+    ctx.quadraticCurveTo(cx, mouthY + 38, cx + rx - 6, mouthY + 4);
+    ctx.lineTo(cx + rx - 12, mouthY + 24);
+    ctx.quadraticCurveTo(cx, mouthY + 50, cx - rx + 12, mouthY + 24);
+    ctx.closePath();
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx - rx + 6, mouthY + 4);
+    ctx.quadraticCurveTo(cx, mouthY + 38, cx + rx - 6, mouthY + 4);
+    ctx.lineTo(cx + rx - 12, mouthY + 24);
+    ctx.quadraticCurveTo(cx, mouthY + 50, cx - rx + 12, mouthY + 24);
+    ctx.closePath();
+    ctx.clip();
+    for (let row = 0; row < 3; row++) {
+      const cols = 7;
+      for (let i = 0; i < cols; i++) {
+        const span = (rx * 2) / cols;
+        const x = cx - rx + (row % 2) * span * 0.5 + i * span;
+        ctx.fillStyle = (i + row) % 2 ? '#A89480' : '#6E6254';
+        ctx.fillRect(x + 1, mouthY + 2 + row * 12, span - 2, 11);
+      }
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, mouthY, rx, ry + 5, 0, 0, TAU);
+    ctx.clip();
+    for (let i = 0; i < 14; i++) {
+      const a0 = (i / 14) * TAU - Math.PI / 2;
+      const a1 = ((i + 1) / 14) * TAU - Math.PI / 2;
+      ctx.fillStyle = i % 2 ? '#C4B4A2' : '#7C6E5E';
+      ctx.beginPath();
+      ctx.moveTo(cx, mouthY);
+      ctx.arc(cx, mouthY, rx + 4, a0, a1);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    const hole = ctx.createRadialGradient(cx, mouthY + 2, 6, cx, mouthY, rx - 16);
+    hole.addColorStop(0, '#07090C');
+    hole.addColorStop(0.72, '#1A2432');
+    hole.addColorStop(1, '#314054');
+    ctx.fillStyle = hole;
+    ctx.beginPath();
+    ctx.ellipse(cx, mouthY, rx - 18, ry - 3, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(24,18,14,0.7)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(cx, mouthY + 1, rx - 16, ry - 2, 0, 0, TAU);
+    ctx.stroke();
+    ctx.strokeStyle = '#4A4036';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, mouthY, rx, ry + 5, 0, 0, TAU);
+    ctx.stroke();
+  }
   function drawStoneWell(cx, ground, scale) {
     const s = scale || 1;
     if (s !== 1) {
@@ -1580,57 +1646,34 @@
       ctx.translate(-cx, -ground);
     }
     const mouthY = ground - 28;
-    ctx.fillStyle = '#5C3A22';
-    traceRound(cx - 92, mouthY - 188, 16, 196, 5); ctx.fill();
-    traceRound(cx + 76, mouthY - 188, 16, 196, 5); ctx.fill();
-    const beam = ctx.createLinearGradient(cx - 110, mouthY - 140, cx + 110, mouthY - 120);
+    const beamTop = mouthY - 236;
+    ctx.fillStyle = '#6B4A30';
+    traceRound(cx - 96, beamTop, 14, mouthY + 10 - beamTop, 4); ctx.fill();
+    traceRound(cx + 82, beamTop, 14, mouthY + 10 - beamTop, 4); ctx.fill();
+    const beam = ctx.createLinearGradient(cx - 110, beamTop, cx + 110, beamTop + 16);
     beam.addColorStop(0, '#6A3E1C');
     beam.addColorStop(0.5, '#E2B56A');
     beam.addColorStop(1, '#5A3416');
     ctx.fillStyle = beam;
-    traceRound(cx - 108, mouthY - 196, 216, 18, 6);
+    traceRound(cx - 100, beamTop, 200, 16, 5);
     ctx.fill();
+    const pulleyR = 15;
+    const pulleyY = beamTop + 16 + 2 + pulleyR;
     ctx.save();
-    ctx.translate(cx + 84, mouthY - 158);
+    ctx.translate(cx, pulleyY);
     ctx.strokeStyle = '#C9A36A';
     ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.arc(0, 0, 18, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, pulleyR, 0, TAU); ctx.stroke();
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(-15, 0); ctx.lineTo(15, 0);
-    ctx.moveTo(0, -15); ctx.lineTo(0, 15);
+    ctx.moveTo(-11, 0); ctx.lineTo(11, 0);
+    ctx.moveTo(0, -11); ctx.lineTo(0, 11);
     ctx.stroke();
     ctx.restore();
-    ctx.strokeStyle = '#E6C98A';
-    ctx.lineWidth = 3.5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(cx + 84, mouthY - 140);
-    ctx.quadraticCurveTo(cx + 30, mouthY - 10, cx, mouthY + 4);
-    ctx.stroke();
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * TAU;
-      const sx = cx + Math.cos(a) * 86;
-      const sy = mouthY + Math.sin(a) * 28;
-      const grd = ctx.createRadialGradient(sx - 5, sy - 4, 2, sx, sy, 18);
-      grd.addColorStop(0, '#E7E2D8');
-      grd.addColorStop(0.6, '#8E877C');
-      grd.addColorStop(1, '#4E493F');
-      ctx.fillStyle = grd;
-      ctx.beginPath();
-      ctx.ellipse(sx, sy, 18, 12, a, 0, TAU);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#10141C';
-    ctx.beginPath(); ctx.ellipse(cx, mouthY, 64, 20, 0, 0, TAU); ctx.fill();
-    const lip = ctx.createLinearGradient(cx - 70, mouthY - 10, cx + 70, mouthY + 16);
-    lip.addColorStop(0, '#6E675C');
-    lip.addColorStop(0.5, '#F0EBE2');
-    lip.addColorStop(1, '#5A544A');
-    ctx.strokeStyle = lip;
-    ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.ellipse(cx, mouthY, 64, 20, 0, 0, TAU); ctx.stroke();
+    drawWellRim(cx, mouthY);
     if (s !== 1) ctx.restore();
-    return { x: cx, y: ground - 28 * s };
+    const world = (y) => ground + (y - ground) * s;
+    return { x: cx, y: world(mouthY), pulleyX: cx, pulleyY: world(pulleyY + pulleyR) };
   }
   function drawDuskSet(ground, opt) {
     opt = opt || {};
@@ -1711,17 +1754,27 @@
     const mouth = drawDuskSet(ground);
     ctx.save();
     ctx.beginPath();
-    ctx.ellipse(mouth.x, mouth.y, 58, 16, 0, 0, TAU);
+    ctx.ellipse(mouth.x, mouth.y, 52, 14, 0, 0, TAU);
     ctx.clip();
     ctx.translate(mouth.x, mouth.y);
     ctx.rotate(t * 1.2);
     if (art && art.portal) ctx.drawImage(art.portal, -74, -38, 148, 76);
     ctx.restore();
     const hang = CHAR_PIV['kiro-barrel-title'];
-    const ropeEnd = mouth.y + 4;
-    const barrelY = hang ? ropeEnd - ((hang.rope - hang.p[1]) * SPRITE_SCALE) : mouth.y + 10;
-    drawChar('kiro-barrel-title', mouth.x, barrelY, SPRITE_SCALE, 1);
-    drawChar('tara-winch-ready', mouth.x + 108, ground, SPRITE_SCALE, 1);
+    const sway = Math.sin(t * 1.15) * 8;
+    const ropeY = mouth.pulleyY + 54;
+    const ropeDy = hang ? (hang.rope - hang.p[1]) * SPRITE_SCALE : -20;
+    const barrelX = mouth.x + sway;
+    const barrelY = ropeY - ropeDy;
+    ctx.strokeStyle = '#E6C98A';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(mouth.pulleyX, mouth.pulleyY);
+    ctx.lineTo(barrelX, ropeY);
+    ctx.stroke();
+    drawChar('kiro-barrel-title', barrelX, barrelY, SPRITE_SCALE, 1);
+    drawChar('tara-winch-ready', mouth.x + 122, ground, SPRITE_SCALE, 1);
     const pile = Math.min(12, totalCoins);
     for (let i = 0; i < pile; i++) drawCoinSprite(mouth.x - 150 + (i % 4) * 18, ground - 18 + ((i / 4) | 0) * 16, Math.cos(t * 3 + i));
     const appear = ease(clamp((performance.now() - titleAt) / 260, 0, 1));
@@ -1763,7 +1816,7 @@
     uiTitel = { x: camX + viewW / 2 - 70, y: viewH - 132, w: 140, h: 40 };
     const ground = viewH * 0.58;
     const wellScale = 0.46;
-    const mouth = drawDuskSet(ground, { wellX: 274, hutX: W - 68, wellScale: wellScale });
+    const mouth = drawDuskSet(ground, { wellX: 318, hutX: W - 52, wellScale: wellScale });
     ctx.save();
     ctx.beginPath();
     ctx.ellipse(mouth.x, mouth.y, 64 * wellScale, 18 * wellScale, 0, 0, TAU);
@@ -1775,15 +1828,15 @@
     const poseIn = ease(clamp(faintT / 280, 0, 1));
     ctx.save();
     ctx.globalAlpha = 0.4 + 0.6 * poseIn;
-    if (sit) drawChar('kiro-situp-proud', 150, ground - 6, FAINT_SCALE, 1);
-    else if (faintT < 320) drawChar('kiro-lying-faint', 150, ground - 18, FAINT_SCALE, 1);
-    else drawChar('tara-bends-over-kiro', 168, ground - 24, FAINT_SCALE, 1);
+    if (sit) drawChar('kiro-situp-proud', 196, ground - 8, FAINT_SCALE, 1);
+    else if (faintT < 320) drawChar('kiro-lying-faint', 188, ground - 16, FAINT_SCALE, 1);
+    else drawChar('tara-bends-over-kiro', 196, ground - 22, FAINT_SCALE, 1);
     ctx.restore();
     const shown = Math.min(runCoins, Math.ceil(clamp((faintT - 150) / 1050, 0, 1) * Math.max(0, runCoins)));
     if (shown > coinPop) { KWAudio.play('score_pickup', { semi: shown }); coinPop = shown; }
     const pile = Math.min(shown, 12);
     for (let i = 0; i < pile; i++) {
-      const cx = 96 + (i % 3) * 16;
+      const cx = 46 + (i % 3) * 14;
       const cy = ground + 6 - ((i / 3) | 0) * 12;
       ctx.fillStyle = 'rgba(0,0,0,0.32)';
       ctx.beginPath();
