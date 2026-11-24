@@ -34,6 +34,9 @@
     faintButtonMs: 300, pointsPerMeter: 10,     coinPoints: 10, noBarrelScoreMult: 1.5, coinDropOnKillChance: 0.45
   };
   const W = 390, BH = C.barrelH, BW = C.barrelW, TAU = Math.PI * 2;
+  const WALL_DUCK_ON_INPUT = true;
+  const SWING_RESTITUTION = 0.35;
+  const ROPE_WOBBLE_MAX = 2;
   const SPRITE_SCALE = 1 / 3;
   const PLAY_SCALE = SPRITE_SCALE * 1.35;
   const FAINT_SCALE = 0.66;
@@ -167,6 +170,8 @@
   let sagMode = 'B', visSag = 0, duckT = 0, barrel = 'intact', spares = 1, invuln = 0, equipT = 0;
   let slashPhase = null, slashT = 0, slashCd = 0, slashDir = 1, slashSerial = 0, bufUntil = 0, actionLast = '';
   let swingPhase = null, swingT = 0, swingU = 0, swingCd = 0, swingFromX = 0, swingFromY = 0, swingToX = 0, swingDir = 1, swingKills = 0, swingHit = false;
+  let swingTheta = 0, swingOmega = 0, swingLen = 1, swingPulleyX = 195;
+  let ropeWobble = 0, ropeWobbleV = 0, lastVx = 0;
   let recoil = 0, impact = 0, pressed = false, runCoins = 0, totalCoins = 0, score = 0, bestD = 0, bestS = 0;
   let combo = 1, comboAt = -1e9, playerMoved = 0, unfair = false, caused = false, firstCreep = false, knotLock = 0;
   let waveT = 0, waveN = 1, waveOn = true, attackAt = 0, lastImpact = -1e9, lastPickupM = 0, pickupRoll = -1, pickup = null;
@@ -186,7 +191,8 @@
   for (let i = 0; i < 8; i++) scarf.push({ x: 0, y: 0, ox: 0, oy: 0 });
   const dust = [];
   let joyAnchor = null, joyKnob = { dx: 0, dy: 0 }, joyFrom = null, joyTo = null, joyBack = 0, joyId = null;
-  let restX = 300, restY = 700, ringD = 128, knobD = 52, deadFrac = 0.12;
+  let restX = 300, restY = 700, ringD = 128, knobD = 52, deadFrac = 0.12, fullFrac = 0.85;
+  let stickX = 0, stickY = 0;
   let act = { x: 70, y: 760, d: 72, hit: 88 }, barrelBtn = { x: 160, y: 760, d: 58, show: false };
   let ents = [], coins = [], parts = [];
   const ghost = [{ x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 0 }];
@@ -371,30 +377,32 @@
     if (slashCd > 0 || slashPhase) return 'locked';
     return 'sword';
   }
-  function steer(dx, dy) {
-    const ax = Math.abs(dx), ay = Math.abs(dy);
-    const tan60 = Math.tan((45 + C.hysteresisDeg) * Math.PI / 180);
-    const tan30 = Math.tan((45 - C.hysteresisDeg) * Math.PI / 180);
-    if (!axisLock) {
-      if (ay > ax * tan60) axisLock = 'v';
-      else if (ay < ax * tan30) axisLock = 'h';
-      else return null;
-    } else if (axisLock === 'h' && ay > ax * tan60) axisLock = 'v';
-    else if (axisLock === 'v' && ay < ax * tan30) axisLock = 'h';
-    const d = axisLock === 'h' ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
-    if (d === 'left') lastSide = -1; else if (d === 'right') lastSide = 1;
-    return d;
+  function setStick(nx, ny, gain) {
+    const g = gain == null ? 1 : gain;
+    stickX = nx * g;
+    stickY = ny * g;
+    if (nx < -0.35) { stickDir = 'left'; lastSide = -1; }
+    else if (nx > 0.35) { stickDir = 'right'; lastSide = 1; }
+    else if (ny < 0) stickDir = 'up';
+    else if (ny > 0) stickDir = 'down';
+    else stickDir = null;
   }
   function readJoy() {
-    if (joyId == null || !ptrs.has(joyId) || !joyAnchor) { joyKnob = { dx: 0, dy: 0 }; return; }
+    if (joyId == null || !ptrs.has(joyId) || !joyAnchor) {
+      joyKnob = { dx: 0, dy: 0 };
+      stickX = 0; stickY = 0; stickDir = null;
+      return;
+    }
     const pr = ptrs.get(joyId);
     let dx = pr.x - joyAnchor.x, dy = pr.y - joyAnchor.y;
     const mag = Math.hypot(dx, dy), R = ringD / 2;
     if (mag > R && mag > 0) { dx *= R / mag; dy *= R / mag; }
     joyKnob = { dx: dx, dy: dy };
     const m = Math.min(mag, R);
-    if (m < R * deadFrac) { axisLock = null; stickDir = null; return; }
-    stickDir = steer(dx, dy);
+    const u = R > 0 ? m / R : 0;
+    if (u <= deadFrac || m <= 0) { stickX = 0; stickY = 0; stickDir = null; return; }
+    const gain = u >= fullFrac ? 1 : (u - deadFrac) / (fullFrac - deadFrac);
+    setStick(dx / m, dy / m, gain);
   }
 
   function onDown(e) {
@@ -471,7 +479,7 @@
       joyFrom = { x: joyAnchor.x, y: joyAnchor.y };
       joyTo = { x: restX, y: restY };
       joyBack = 140;
-      joyId = null; joyKnob = { dx: 0, dy: 0 }; stickDir = null; axisLock = null;
+      joyId = null; joyKnob = { dx: 0, dy: 0 }; stickX = 0; stickY = 0; stickDir = null; axisLock = null;
     }
     ptrs.delete(e.pointerId);
   }
@@ -493,7 +501,7 @@
     scrollV = C.portalScroll;
   }
   function resetRun() {
-    px = W / 2; py = Math.min(360, visH * 0.46); moveK = 0; holdMs = 0; coast = null; stickDir = null; axisLock = null;
+    px = W / 2; py = Math.min(360, visH * 0.46); moveK = 0; holdMs = 0; coast = null; stickX = 0; stickY = 0; stickDir = null; axisLock = null;
     barrel = 'intact'; spares = C.spareStart; invuln = 0; equipT = 0; duckT = 0; visSag = 0;
     slashPhase = null; slashT = 0; slashCd = 0; slashSerial++; bufUntil = 0;
     swingPhase = null; swingT = 0; swingU = 0; swingCd = 0; swingKills = 0; ghostN = 0;
@@ -564,11 +572,41 @@
     slashDir = slashSide(); lastSide = slashDir;
     KWAudio.play('sword_slash');
   }
+  function ropeAttachDy() {
+    const spec = CHAR_PIV[swingPhase ? 'kiro-barrel-swing' : 'kiro-barrel-idle'];
+    return ((spec.rope != null ? spec.rope : spec.p[1]) - spec.p[1]) * PLAY_SCALE;
+  }
+  function placeOnRope(theta) {
+    const ax = swingPulleyX, ay = 8;
+    const hx = ax + Math.sin(theta) * swingLen;
+    const hy = ay + Math.cos(theta) * swingLen;
+    px = hx;
+    py = hy - PIVOT_DY - ropeAttachDy();
+  }
+  function swingLimits() {
+    const span = Math.min(swingLen * 0.98, Math.max(8, swingPulleyX - minX()));
+    const spanR = Math.min(swingLen * 0.98, Math.max(8, maxX() - swingPulleyX));
+    return { left: -Math.asin(span / swingLen), right: Math.asin(spanR / swingLen) };
+  }
   function startSwing() {
     swingPhase = 'windup'; swingT = 0; swingU = 0; swingKills = 0; swingHit = false; ghostN = 0;
     swingFromX = px; swingFromY = py; swingDir = atLeft() ? 1 : -1;
-    swingToX = swingDir > 0 ? (W - C.wall - halfW() - 4) : (C.wall + halfW() + 4);
+    swingPulleyX = (minX() + maxX()) * 0.5;
+    const hy = py + BH / 2 + ropeAttachDy();
+    swingLen = Math.max(80, Math.hypot(px - swingPulleyX, hy - 8));
+    swingTheta = Math.atan2(px - swingPulleyX, hy - 8);
+    const lim = swingLimits();
+    const target = swingDir > 0 ? lim.right : lim.left;
+    const travel = Math.max(0.2, Math.abs(target - swingTheta));
+    swingOmega = Math.sign(target - swingTheta || swingDir) * (travel / 0.48);
+    swingToX = swingDir > 0 ? maxX() : minX();
+    placeOnRope(swingTheta);
     KWAudio.play('barrel_swing');
+  }
+  function finishSwing() {
+    const struck = swingHit;
+    swingPhase = null; swingT = 0; swingU = 0; swingCd = C.swingCd; swingOmega = 0; ghostN = 0;
+    if (struck) hitStop = Math.max(hitStop, C.hitStopSwing);
   }
   function swordHits() {
     const sweep = slashPhase === 'recover' ? 1 : ease(clamp(slashT / C.swordSweepMs, 0, 1));
@@ -874,10 +912,10 @@
   }
 
   function barrelSway() {
-    if (state !== 'play' && state !== 'portal') return 0;
+    if ((state !== 'play' && state !== 'portal') || swingPhase) return 0;
     const t = playMs / 1000;
     const nearTop = Math.max(0, 1 - Math.min(1, depthM() / 14));
-    return Math.sin(t * (1.5 + nearTop * 0.8)) * C.hitboxSwayMax;
+    return Math.sin(t * (1.5 + nearTop * 0.8)) * C.hitboxSwayMax + ropeWobble;
   }
   function poseName() {
     if (barrel === 'broken') return 'kiro-hang-nobarrel';
@@ -904,28 +942,16 @@
     }
   }
   function ropeStep(dt, bx, by) {
-    const ax = ropeAx, ay = 8;
-    ropeAx += (px - ropeAx) * Math.min(1, dt / 160);
-    const dist = Math.max(40, Math.hypot(bx - ax, by - ay));
-    const slack = (coast === 'up' && moveK > 0) ? 1.065 : 1;
-    const rest = dist * slack / SEG;
-    ropeAcc += dt;
-    let n = 0;
-    while (ropeAcc >= 8 && n < 5) {
-      ropeAcc -= 8; n++;
-      for (let i = 1; i < SEG; i++) {
-        const vx = (rx[i] - ox[i]) * 0.98, vy = (ry[i] - oy[i]) * 0.98;
-        ox[i] = rx[i]; oy[i] = ry[i]; rx[i] += vx; ry[i] += vy;
-      }
-      for (let it = 0; it < 3; it++) {
-        rx[0] = ax; ry[0] = ay; rx[SEG] = bx; ry[SEG] = by;
-        for (let i = 0; i < SEG; i++) {
-          const dx = rx[i + 1] - rx[i], dy = ry[i + 1] - ry[i], d = Math.hypot(dx, dy) || 1, diff = (d - rest) / d;
-          if (i) { rx[i] += dx * diff * 0.5; ry[i] += dy * diff * 0.5; }
-          if (i + 1 < SEG) { rx[i + 1] -= dx * diff * 0.5; ry[i + 1] -= dy * diff * 0.5; }
-        }
-      }
+    const swinging = !!swingPhase;
+    const ax = swinging ? swingPulleyX : bx;
+    const ay = 8;
+    ropeAx = ax;
+    for (let i = 0; i <= SEG; i++) {
+      const k = i / SEG;
+      rx[i] = lerp(ax, bx, k);
+      ry[i] = lerp(ay, by, k);
     }
+    void dt;
   }
 
   function updatePlay(dt) {
@@ -937,54 +963,72 @@
       else scrollV = Math.min(C.scrollMax, scrollV + C.scrollAcc * dt / 1000);
     }
     depthPx += scrollV * dt / 1000;
-    const dir = stickDir;
-    if (dir) {
-      if (dir !== coast) { holdMs = 0; moveK = C.inputStart; if (dir === 'up' && sagMode === 'B') visSag = C.sagPx; }
-      else { holdMs += dt; moveK = C.inputStart + (1 - C.inputStart) * clamp(holdMs / C.inputFullMs, 0, 1); }
-      coast = dir;
-    } else if (moveK > 0) { moveK = Math.max(0, moveK - dt / C.inputReleaseMs); if (moveK === 0) coast = null; }
-    if (!swingPhase && (state === 'play' || state === 'portal')) {
-      const d = dir || (moveK > 0 ? coast : null);
+    const gain = Math.hypot(stickX, stickY);
+    moveK = gain;
+    const goingUp = stickY < -0.2;
+    if (gain > 0.04) coast = goingUp ? 'up' : (stickY > 0.2 ? 'down' : (stickX < 0 ? 'left' : 'right'));
+    else coast = null;
+    if (!swingPhase && (state === 'play' || state === 'portal') && gain > 0.001) {
+      const nx = stickX / gain, ny = stickY / gain;
+      const sx = C.speedSide;
+      const sy = ny < 0 ? C.speedUp : C.speedDown;
+      const speed = gain / Math.hypot(nx / sx, ny / sy);
       const mul = speedMul();
-      let vx = 0, vy = 0;
-      if (d === 'left') vx = -C.speedSide * moveK * mul;
-      else if (d === 'right') vx = C.speedSide * moveK * mul;
-      else if (d === 'down') vy = C.speedDown * moveK * mul;
-      else if (d === 'up') vy = -C.speedUp * moveK * mul;
+      const vx = nx * speed * mul;
+      const vy = ny * speed * mul;
       const oxp = px, oyp = py;
       px = clamp(px + vx * dt / 1000, minX(), maxX());
       py = clamp(py + vy * dt / 1000, C.barrelTopMin, playBottom());
+      if (Math.abs(lastVx) > 240 && Math.abs(vx) < 80) ropeWobbleV += clamp(lastVx * 0.004, -ROPE_WOBBLE_MAX, ROPE_WOBBLE_MAX);
+      lastVx = vx;
       playerMoved += Math.hypot(px - oxp, py - oyp);
       if (playerMoved > 80) caused = true;
-      if (d === 'up' && KWAudio.creakOk()) KWAudio.play('rope_retract');
-      if (d === 'down' && playMs - creakSide > 500) { creakSide = playMs; KWAudio.play('rope_extend'); }
-      if ((d === 'up' || Math.abs(px - ropeAx) > 20) && KWAudio.creakOk()) KWAudio.play('rope_creak');
+      if (ny < -0.35 && KWAudio.creakOk()) KWAudio.play('rope_retract');
+      if (ny > 0.35 && playMs - creakSide > 500) { creakSide = playMs; KWAudio.play('rope_extend'); }
+      if ((ny < -0.35 || Math.abs(px - ropeAx) > 20) && KWAudio.creakOk()) KWAudio.play('rope_creak');
     }
-    visSag = Math.max(0, visSag - C.sagPx * (dt / C.sagMs));
-    const wantDuck = barrel === 'intact' && atWall();
+    visSag = 0;
+    const pushingWall = atLeft() ? stickX < -0.45 : stickX > 0.45;
+    const wantDuck = barrel === 'intact' && atWall() && !swingPhase && (!WALL_DUCK_ON_INPUT || pushingWall);
     if (wantDuck) duckT = Math.min(C.duckMs, duckT + dt); else duckT = Math.max(0, duckT - dt);
     if (swingPhase === 'windup') {
       swingT += dt;
       if (swingT >= C.swingWindup) { swingPhase = 'fly'; swingT = 0; }
-    } else if (swingPhase === 'fly') {
-      swingT += dt; swingU = clamp(swingT / C.swingMs, 0, 1);
-      px = lerp(swingFromX, swingToX, swingU);
-      py = swingFromY - Math.sin(swingU * Math.PI) * C.swingArc;
-      if (ghostN < 3 && (ghostN === 0 || swingT - ghost[ghostN - 1].t >= 70)) {
-        const g = ghost[ghostN++];
-        g.x = px; g.y = py; g.t = swingT;
+    } else if (swingPhase === 'fly' || swingPhase === 'bounce') {
+      const step = dt / 1000;
+      const lim = swingLimits();
+      if (swingPhase === 'fly') {
+        swingTheta += swingOmega * step;
+        const hitRight = swingOmega > 0 && swingTheta >= lim.right;
+        const hitLeft = swingOmega < 0 && swingTheta <= lim.left;
+        if (hitRight || hitLeft) {
+          swingTheta = hitRight ? lim.right : lim.left;
+          swingOmega = -swingOmega * SWING_RESTITUTION;
+          swingPhase = 'bounce';
+          impact = 1;
+          KWAudio.play('barrel_land');
+          shake = Math.max(shake, 3.5);
+          burst(px, py + BH / 2, 8, '#E0A868', 90, 360, 280);
+        }
+      } else {
+        swingOmega += (-34 * swingTheta - 7.5 * swingOmega) * step;
+        swingTheta += swingOmega * step;
+        if (swingTheta > lim.right) { swingTheta = lim.right; swingOmega = Math.min(0, swingOmega); }
+        if (swingTheta < lim.left) { swingTheta = lim.left; swingOmega = Math.max(0, swingOmega); }
+        if (Math.abs(swingTheta) < 0.03 && Math.abs(swingOmega) < 0.25) finishSwing();
       }
-      const hb = bodyBox();
-      swingBox.x = hb.x - C.swingPad; swingBox.y = hb.y - C.swingPad;
-      swingBox.w = hb.w + C.swingPad * 2; swingBox.h = hb.h + C.swingPad * 2;
-      const box = swingBox;
-      for (const e of ents) if (e.alive && e.hp < 1e8 && e.kind !== 'hazard' && overlap(box, { x: e.x - 20, y: e.y - 16, w: 40, h: 32 })) kill(e, swingDir, true);
-      if (swingT >= C.swingMs) {
-        px = swingToX; py = swingFromY; swingPhase = null; swingCd = C.swingCd; impact = 1; duckT = C.duckMs;
-        ghostN = 0;
-        KWAudio.play('barrel_land');
-        shake = Math.max(shake, 3.5);
-        if (swingHit) hitStop = Math.max(hitStop, C.hitStopSwing);
+      if (swingPhase) {
+        placeOnRope(swingTheta);
+        swingT += dt; swingU = clamp(Math.abs(swingTheta) / 0.6, 0, 1);
+        if (ghostN < 3 && (ghostN === 0 || swingT - ghost[ghostN - 1].t >= 70)) {
+          const g = ghost[ghostN++];
+          g.x = px; g.y = py; g.t = swingT;
+        }
+        const hb = bodyBox();
+        swingBox.x = hb.x - C.swingPad; swingBox.y = hb.y - C.swingPad;
+        swingBox.w = hb.w + C.swingPad * 2; swingBox.h = hb.h + C.swingPad * 2;
+        for (const e of ents) if (e.alive && e.hp < 1e8 && e.kind !== 'hazard' && overlap(swingBox, { x: e.x - 20, y: e.y - 16, w: 40, h: 32 })) kill(e, swingDir, true);
+        if (swingT > 1600) finishSwing();
       }
     }
     if (slashPhase === 'windup') { slashT += dt; if (slashT >= C.swordWindup) { slashPhase = 'active'; slashT = 0; } }
@@ -1024,7 +1068,10 @@
     }
     bits.length = bi;
     dustStep(dt);
-    const grip = harnessOf(px, py, visualRot(), sagMode === 'B' ? visSag : 0);
+    ropeWobbleV += -ropeWobble * 40 * dt / 1000;
+    ropeWobbleV *= Math.pow(0.04, dt / 160);
+    ropeWobble = clamp(ropeWobble + ropeWobbleV * dt / 1000, -ROPE_WOBBLE_MAX, ROPE_WOBBLE_MAX);
+    const grip = harnessOf(px, py, 0, 0);
     ropeStep(dt, grip.x, grip.y);
     if (joyBack > 0 && joyFrom) {
       joyBack -= dt;
@@ -1048,9 +1095,12 @@
     if (bot && state === 'play') botTick();
   }
   function botTick() {
-    if (bot === 'passive') { stickDir = null; return; }
+    if (bot === 'passive') { stickX = 0; stickY = 0; stickDir = null; return; }
     if (bot === 'random') {
-      if (rng() < 0.05) stickDir = ['left', 'right', 'up', 'down'][(rng() * 4) | 0];
+      if (rng() < 0.05) {
+        const d = ['left', 'right', 'up', 'down'][(rng() * 4) | 0];
+        setStick(d === 'left' ? -1 : d === 'right' ? 1 : 0, d === 'up' ? -1 : d === 'down' ? 1 : 0, 1);
+      }
       if (rng() < 0.02) { queuedAction = predict(); bufUntil = queuedAction === 'locked' ? 0 : performance.now() + C.actionBufferMs; tryAction(); }
       return;
     }
@@ -1058,10 +1108,10 @@
     for (const e of ents) if (e.alive && (e.state === 'windup' || e.state === 'lunge' || e.state === 'dive')) {
       const d = Math.abs(e.y - py); if (d < bd) { bd = d; threat = e; }
     }
-    if (threat && bd < 110) stickDir = threat.y > py + 8 ? 'up' : 'down';
-    else if (px < W * 0.38) stickDir = 'right';
-    else if (px > W * 0.62) stickDir = 'left';
-    else stickDir = (playMs / 700 | 0) % 2 ? 'up' : 'down';
+    if (threat && bd < 110) setStick(0, threat.y > py + 8 ? 1 : -1, 1);
+    else if (px < W * 0.38) setStick(1, 0, 1);
+    else if (px > W * 0.62) setStick(-1, 0, 1);
+    else setStick(0, (playMs / 700 | 0) % 2 ? -1 : 1, 1);
     if (threat && Math.abs(threat.x - px) < C.swordR && Math.abs(threat.y - py) < 90) {
       queuedAction = predict();
       bufUntil = queuedAction === 'locked' ? 0 : performance.now() + 120;
@@ -1339,7 +1389,7 @@
   }
   function drawPlayer(alpha) {
     const x = lerpA(prev.px, px, alpha) + barrelSway();
-    const y = lerpA(prev.py, py, alpha) + PIVOT_DY + lerpA(prev.sag, visSag, alpha);
+    const y = lerpA(prev.py, py, alpha) + PIVOT_DY;
     const hidden = barrel === 'broken' && invuln > 0 && ((invuln / 70) | 0) % 2 === 0;
     const pop = breakPop > 0 ? 1 + Math.sin(breakPop * Math.PI) * 0.16 : 1;
     ctx.save();
@@ -1770,10 +1820,10 @@
       ctx.arc(a.x + dx, a.y + dy, on ? 5 : 3.5, 0, TAU);
       ctx.fill();
     };
-    chev(0, -Rnotch, stickDir === 'up');
-    chev(0, Rnotch, stickDir === 'down');
-    chev(-Rnotch, 0, stickDir === 'left');
-    chev(Rnotch, 0, stickDir === 'right');
+    chev(0, -Rnotch, stickY < -0.35);
+    chev(0, Rnotch, stickY > 0.35);
+    chev(-Rnotch, 0, stickX < -0.35);
+    chev(Rnotch, 0, stickX > 0.35);
     const icon = predict();
     const showSwing = icon === 'swing' || (icon === 'locked' && barrel === 'intact' && atWall() && !swingPhase);
     const press = pressed ? 3 : 0;
