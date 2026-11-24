@@ -1,0 +1,172 @@
+{
+  "kiro-barrel-idle": {
+    "canvas": [
+      240,
+      288
+    ],
+    "pivot": [
+      120,
+      206
+    ],
+    "kind": "barrel_center",
+    "sprite_box": [
+      4,
+      43,
+      232,
+      241
+    ]
+  },
+  "kiro-barrel-title": {
+    "canvas": [
+      240,
+      288
+    ],
+    "pivot": [
+      120,
+      196
+    ],
+    "kind": "barrel_center",
+    "sprite_box": [
+      4,
+      11,
+      232,
+      273
+    ]
+  },
+  "kiro-barrel-swing": {
+    "canvas": [
+      240,
+      288
+    ],
+    "pivot": [
+      120,
+      205
+    ],
+    "kind": "barrel_center",
+    "sprite_box": [
+      4,
+      38,
+      232,
+      246
+    ]
+  },
+  "kiro-barrel-slash": {
+    "canvas": [
+      240,
+      288
+    ],
+    "pivot": [
+      120,
+      211
+    ],
+    "kind": "barrel_center",
+    "sprite_box": [
+      4,
+      58,
+      232,
+      226
+    ]
+  },
+  "kiro-barrel-duck": {
+    "canvas": [
+      240,
+      288
+    ],
+    "pivot": [
+      120,
+      220
+    ],
+    "kind": "barrel_center",
+    "sprite_box": [
+      4,
+      84,
+      232,
+      200
+    ]
+  },
+  "kiro-hang-nobarrel": {
+    "canvas": [
+      156,
+      216
+    ],
+    "pivot": [
+      78,
+      91
+    ],
+    "kind": "chest_rope",
+    "sprite_box": [
+      10,
+      4,
+      135,
+      208
+    ]
+  },
+  "kiro-lying-faint": {
+    "canvas": [
+      360,
+      180
+    ],
+    "pivot": [
+      180,
+      98
+    ],
+    "kind": "torso",
+    "sprite_box": [
+      37,
+      4,
+      286,
+      172
+    ]
+  },
+  "kiro-situp-proud": {
+    "canvas": [
+      216,
+      216
+    ],
+    "pivot": [
+      108,
+      149
+    ],
+    "kind": "hips",
+    "sprite_box": [
+      16,
+      4,
+      184,
+      208
+    ]
+  },
+  "tara-winch-ready": {
+    "canvas": [
+      210,
+      270
+    ],
+    "pivot": [
+      105,
+      264
+    ],
+    "kind": "feet",
+    "sprite_box": [
+      46,
+      4,
+      117,
+      262
+    ]
+  },
+  "tara-bends-over-kiro": {
+    "canvas": [
+      360,
+      270
+    ],
+    "pivot": [
+      180,
+      148
+    ],
+    "kind": "kiro_torso",
+    "sprite_box": [
+      38,
+      4,
+      284,
+      262
+    ]
+  }
+}
