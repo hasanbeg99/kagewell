@@ -26,7 +26,7 @@
     portalScroll: 40, portalLerpToScroll0Ms: 400,
     hitboxSwayMax: 4, sagPx: 4, sagMs: 60,
     swordR: 72, swordWindup: 40, swordActive: 100, swordRecover: 40, swordSweepMs: 90, swordCd: 260,
-    duckMs: 120, swingWindup: 70, swingMs: 520, swingArc: 60, swingPad: 10, swingCd: 1500,
+    duckMs: 120, swingWindup: 67, swingMs: 520, swingArc: 60, swingPad: 10, swingCd: 1500,
     hitStopSword: 50, hitStopSwing: 40, swingShake: 4,
     spareStart: 1, spareMax: 3, breakInvuln: 1200, breakSpeed: 1.15,
     equipMs: 400, equipInvuln: 1000, pickupGapM: 60, pickupEveryM: 10, pickupChance: 0.25,
@@ -66,7 +66,7 @@
   const baked = {};
   let poseBakeKey = '';
   // Barrel-center offset from the sprite pivot, CSS px, unmirrored art. Tuned so the barrel sits on the hitbox.
-  const BARREL_DX = { 'kiro-barrel-idle': 2.6, 'kiro-barrel-slash': -17, 'kiro-barrel-duck': -5.2, 'kiro-barrel-swing': 18.3 };
+  const BARREL_DX = { 'kiro-barrel-idle': -1.8, 'kiro-barrel-slash': -8.6, 'kiro-barrel-duck': -5.2, 'kiro-barrel-swing': 18.3 };
   const NUDGE_Y = { 'kiro-barrel-slash': 2.2, 'kiro-barrel-duck': 6.2, 'kiro-barrel-swing': -0.5 };
   let poseCur = 'kiro-barrel-idle', poseOld = '', poseMix = 1;
   const PIVOT_DY = 48.5;
@@ -626,6 +626,8 @@
     ropeAnchorFrom = lerp(ropeAnchorFrom, swingPulleyX, ropeEase === 'in' ? k : 1);
     ropeAnchorU = 0; ropeEase = 'out';
     lastSide = swingDir < 0 ? -1 : 1;
+    px = swingDir > 0 ? maxX() : minX();
+    py = clamp(swingFromY, C.barrelTopMin, playBottom());
     swingPhase = null; swingT = 0; swingU = 0; swingCd = C.swingCd; swingOmega = 0; ghostN = 0;
     if (struck) hitStop = Math.max(hitStop, C.hitStopSwing);
   }
@@ -1025,7 +1027,7 @@
     if (wantDuck) duckT = Math.min(C.duckMs, duckT + dt); else duckT = Math.max(0, duckT - dt);
     if (swingPhase === 'windup') {
       swingT += dt;
-      if (ropeAnchorU >= 1 || swingT >= ROPE_EASE_MS) { swingPhase = 'fly'; swingT = 0; ghostN = 0; }
+      if (swingT >= C.swingWindup) { swingPhase = 'fly'; swingT = 0; ghostN = 0; }
     } else if (swingPhase === 'fly' || swingPhase === 'bounce') {
       const step = dt / 1000;
       const lim = swingLimits();
