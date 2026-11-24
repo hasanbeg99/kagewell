@@ -36,8 +36,9 @@
   const W = 390, BH = C.barrelH, BW = C.barrelW, TAU = Math.PI * 2;
   const WALL_DUCK_ON_INPUT = true;
   const SWING_RESTITUTION = 0.35;
-  const SWING_BOW = 8;
   const ROPE_WOBBLE_MAX = 2;
+  const ROPE_EASE_MS = 220;
+  const GHOST_FADE_MS = 160;
   const SPRITE_SCALE = 1 / 3;
   const PLAY_SCALE = SPRITE_SCALE * 1.35;
   const FAINT_SCALE = 0.66;
@@ -64,7 +65,8 @@
   }
   const baked = {};
   let poseBakeKey = '';
-  const NUDGE_X = { 'kiro-barrel-idle': 5.7, 'kiro-barrel-slash': 13.7, 'kiro-barrel-duck': 11.8, 'kiro-barrel-swing': -18.9 };
+  // Barrel-center offset from the sprite pivot, CSS px, unmirrored art. Tuned so the barrel sits on the hitbox.
+  const BARREL_DX = { 'kiro-barrel-idle': 2.6, 'kiro-barrel-slash': -17, 'kiro-barrel-duck': -5.2, 'kiro-barrel-swing': 18.3 };
   const NUDGE_Y = { 'kiro-barrel-slash': 2.2, 'kiro-barrel-duck': 6.2, 'kiro-barrel-swing': -0.5 };
   let poseCur = 'kiro-barrel-idle', poseOld = '', poseMix = 1;
   const PIVOT_DY = 48.5;
@@ -172,7 +174,7 @@
   let slashPhase = null, slashT = 0, slashCd = 0, slashDir = 1, slashSerial = 0, bufUntil = 0, actionLast = '';
   let swingPhase = null, swingT = 0, swingU = 0, swingCd = 0, swingFromX = 0, swingFromY = 0, swingToX = 0, swingDir = 1, swingKills = 0, swingHit = false;
   let swingTheta = 0, swingTheta0 = 0, swingOmega = 0, swingLen = 1, swingPulleyX = 195;
-  let ropeWobble = 0, ropeWobbleV = 0, lastVx = 0, ropeAnchorFrom = 195, ropeAnchorU = 1;
+  let ropeWobble = 0, ropeWobbleV = 0, lastVx = 0, ropeAnchorFrom = 195, ropeAnchorU = 1, ropeEase = null;
   let recoil = 0, impact = 0, pressed = false, runCoins = 0, totalCoins = 0, score = 0, bestD = 0, bestS = 0;
   let combo = 1, comboAt = -1e9, playerMoved = 0, unfair = false, caused = false, firstCreep = false, knotLock = 0;
   let waveT = 0, waveN = 1, waveOn = true, attackAt = 0, lastImpact = -1e9, lastPickupM = 0, pickupRoll = -1, pickup = null;
@@ -346,13 +348,9 @@
   }
   function faceDir() {
     if (slashPhase) return slashDir < 0 ? -1 : 1;
-    if (swingPhase) {
-      if (swingOmega > 0.05) return 1;
-      if (swingOmega < -0.05) return -1;
-      return swingDir < 0 ? -1 : 1;
-    }
+    if (swingPhase) return swingDir < 0 ? -1 : 1;
     if (duckT > C.duckMs * 0.3 && atWall()) return atLeft() ? -1 : 1;
-    return lastSide < 0 ? -1 : 1;
+    return 1;
   }
   function slashVisual() {
     if (!slashPhase) return 0;
@@ -585,9 +583,21 @@
     const spec = CHAR_PIV[swingPhase ? 'kiro-barrel-swing' : 'kiro-barrel-idle'];
     return ((spec.rope != null ? spec.rope : spec.p[1]) - spec.p[1]) * PLAY_SCALE;
   }
-  function placeOnRope(theta, bow) {
-    px = clamp(swingPulleyX + Math.sin(theta) * swingLen, minX(), maxX());
-    py = clamp(swingFromY + (bow || 0), C.barrelTopMin, playBottom());
+  function placeOnRope(theta) {
+    const ay = 8;
+    const dirx = Math.sin(theta);
+    const diry = Math.cos(theta);
+    let L = swingLen;
+    const attach = ropeAttachDy();
+    let pyTry = ay + diry * L - PIVOT_DY - attach;
+    const floor = playBottom();
+    if (pyTry > floor && diry > 0.05) {
+      const need = floor + PIVOT_DY + attach - ay;
+      L = Math.min(swingLen, Math.max(40, need / diry));
+      pyTry = ay + diry * L - PIVOT_DY - attach;
+    }
+    px = clamp(swingPulleyX + dirx * L, minX(), maxX());
+    py = clamp(pyTry, C.barrelTopMin, floor);
   }
   function swingLimits() {
     const span = Math.min(swingLen * 0.98, Math.max(8, swingPulleyX - minX()));
@@ -597,22 +607,25 @@
   function startSwing() {
     swingPhase = 'windup'; swingT = 0; swingU = 0; swingKills = 0; swingHit = false; ghostN = 0;
     swingFromX = px; swingFromY = py; swingDir = atLeft() ? 1 : -1;
-    ropeAnchorFrom = rx[0]; ropeAnchorU = 0;
+    ropeAnchorFrom = rx[0]; ropeAnchorU = 0; ropeEase = 'in';
     swingPulleyX = (minX() + maxX()) * 0.5;
     const hy = py + BH / 2 + ropeAttachDy();
     swingLen = Math.max(80, Math.hypot(px - swingPulleyX, hy - 8));
     swingTheta = swingTheta0 = Math.atan2(px - swingPulleyX, hy - 8);
     const lim = swingLimits();
-    const target = swingDir > 0 ? lim.right : lim.left;
+    const target = clamp(-swingTheta0, lim.left, lim.right);
     const travel = Math.max(0.2, Math.abs(target - swingTheta));
     swingOmega = Math.sign(target - swingTheta || swingDir) * (travel / 0.48);
     swingToX = swingDir > 0 ? maxX() : minX();
-    placeOnRope(swingTheta, 0);
+    placeOnRope(swingTheta);
     KWAudio.play('barrel_swing');
   }
   function finishSwing() {
     const struck = swingHit;
-    py = clamp(swingFromY, C.barrelTopMin, playBottom());
+    const k = ropeAnchorU * ropeAnchorU * (3 - 2 * ropeAnchorU);
+    ropeAnchorFrom = lerp(ropeAnchorFrom, swingPulleyX, ropeEase === 'in' ? k : 1);
+    ropeAnchorU = 0; ropeEase = 'out';
+    lastSide = swingDir < 0 ? -1 : 1;
     swingPhase = null; swingT = 0; swingU = 0; swingCd = C.swingCd; swingOmega = 0; ghostN = 0;
     if (struck) hitStop = Math.max(hitStop, C.hitStopSwing);
   }
@@ -951,14 +964,16 @@
   }
   function ropeStep(dt, bx, by) {
     let ax = bx;
-    if (swingPhase) {
-      ropeAnchorU = Math.min(1, ropeAnchorU + dt / 220);
+    if (ropeEase === 'in') {
+      ropeAnchorU = Math.min(1, ropeAnchorU + dt / ROPE_EASE_MS);
       const k = ropeAnchorU * ropeAnchorU * (3 - 2 * ropeAnchorU);
       ax = lerp(ropeAnchorFrom, swingPulleyX, k);
-    } else {
-      ropeAnchorFrom = bx;
-      ropeAnchorU = 1;
-    }
+    } else if (ropeEase === 'out') {
+      ropeAnchorU = Math.min(1, ropeAnchorU + dt / ROPE_EASE_MS);
+      const k = ropeAnchorU * ropeAnchorU * (3 - 2 * ropeAnchorU);
+      ax = lerp(ropeAnchorFrom, bx, k);
+      if (ropeAnchorU >= 1) ropeEase = null;
+    } else ropeAnchorFrom = bx;
     const ay = 8;
     ropeAx = ax;
     for (let i = 0; i <= SEG; i++) {
@@ -1010,7 +1025,7 @@
     if (wantDuck) duckT = Math.min(C.duckMs, duckT + dt); else duckT = Math.max(0, duckT - dt);
     if (swingPhase === 'windup') {
       swingT += dt;
-      if (swingT >= C.swingWindup) { swingPhase = 'fly'; swingT = 0; }
+      if (ropeAnchorU >= 1 || swingT >= ROPE_EASE_MS) { swingPhase = 'fly'; swingT = 0; ghostN = 0; }
     } else if (swingPhase === 'fly' || swingPhase === 'bounce') {
       const step = dt / 1000;
       const lim = swingLimits();
@@ -1022,29 +1037,25 @@
           swingTheta = hitRight ? lim.right : lim.left;
           swingOmega = -swingOmega * SWING_RESTITUTION;
           swingPhase = 'bounce';
-          placeOnRope(swingTheta, 0);
           impact = 1;
           KWAudio.play('barrel_land');
           shake = Math.max(shake, 3.5);
           burst(px, py + BH / 2, 8, '#E0A868', 90, 360, 280);
         }
       } else {
-        swingOmega += (-34 * swingTheta - 7.5 * swingOmega) * step;
+        const rest = clamp(-swingTheta0, lim.left, lim.right);
+        swingOmega += (-28 * (swingTheta - rest) - 8 * swingOmega) * step;
         swingTheta += swingOmega * step;
-        if (swingTheta > lim.right) { swingTheta = lim.right; swingOmega = Math.min(0, swingOmega); }
-        if (swingTheta < lim.left) { swingTheta = lim.left; swingOmega = Math.max(0, swingOmega); }
-        if (Math.abs(swingTheta) < 0.03 && Math.abs(swingOmega) < 0.25) finishSwing();
+        if (swingTheta > lim.right) { swingTheta = lim.right; if (swingOmega > 0) swingOmega = 0; }
+        if (swingTheta < lim.left) { swingTheta = lim.left; if (swingOmega < 0) swingOmega = 0; }
+        if (Math.abs(swingTheta - rest) < 0.02 && Math.abs(swingOmega) < 0.25) finishSwing();
       }
       if (swingPhase) {
-        const wallT = swingDir > 0 ? lim.right : lim.left;
-        const bow = swingPhase === 'fly'
-          ? Math.sin(clamp((swingTheta - swingTheta0) / ((wallT - swingTheta0) || 1), 0, 1) * Math.PI) * SWING_BOW
-          : Math.sin(clamp(Math.abs(swingTheta / (wallT || 1)), 0, 1) * Math.PI) * SWING_BOW * 0.45;
-        placeOnRope(swingTheta, bow);
+        placeOnRope(swingTheta);
         swingT += dt; swingU = clamp(Math.abs(swingTheta) / 0.6, 0, 1);
-        if (ghostN < 3 && (ghostN === 0 || swingT - ghost[ghostN - 1].t >= 70)) {
+        if (swingPhase === 'fly' && ghostN < 3 && (ghostN === 0 || swingT - ghost[ghostN - 1].t >= 70)) {
           const g = ghost[ghostN++];
-          g.x = px; g.y = py; g.t = swingT; g.face = faceDir();
+          g.x = px; g.y = py; g.t = swingT; g.face = swingDir < 0 ? -1 : 1;
         }
         const hb = bodyBox();
         swingBox.x = hb.x - C.swingPad; swingBox.y = hb.y - C.swingPad;
@@ -1402,14 +1413,14 @@
   }
   function drawPoseAt(name, x, y, alpha, face) {
     if (!baked[name]) return;
-    const nx = NUDGE_X[name] || 0;
+    const artDx = BARREL_DX[name] || 0;
     const ny = NUDGE_Y[name] || 0;
     const prevA = ctx.globalAlpha;
     ctx.save();
     ctx.globalAlpha = prevA * alpha;
     ctx.translate(x, y);
-    if (face < 0) ctx.scale(-1, 1);
-    drawBaked(name, nx, ny);
+    if (face < 0 && name !== 'kiro-barrel-idle') ctx.scale(-1, 1);
+    drawBaked(name, -artDx, ny);
     ctx.restore();
   }
   function drawPlayer(alpha) {
@@ -1724,11 +1735,13 @@
       ctx.drawImage(art.barrelIcon, pickup.x - 16, sy - 20, 32, 36);
     }
     for (const e of ents) drawEnt(e, alpha);
-    if ((swingPhase === 'fly' || swingPhase === 'bounce') && ghostN && baked['kiro-barrel-swing']) {
+    if (swingPhase === 'fly' && ghostN && baked['kiro-barrel-swing']) {
       for (let i = 0; i < ghostN; i++) {
         const g = ghost[i];
+        const fade = 1 - (swingT - g.t) / GHOST_FADE_MS;
+        if (fade <= 0) continue;
         ctx.save();
-        ctx.globalAlpha = 0.14 + i * 0.05;
+        ctx.globalAlpha = fade * 0.32;
         drawPoseAt('kiro-barrel-swing', g.x, g.y + PIVOT_DY, 1, g.face || 1);
         ctx.restore();
       }
