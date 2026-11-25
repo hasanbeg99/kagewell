@@ -37,13 +37,14 @@
   const SPRITE_SCALE = 1 / 3;
   const PLAY_SCALE = SPRITE_SCALE * 1.35;
   const FAINT_SCALE = 0.66;
+  // c and p stay in @3x units; the files in game-6x are drawn at twice that size.
   const CHAR_PIV = {
-    'kiro-barrel-idle': { c: [240, 288], p: [120, 206], rope: 176 },
-    'kiro-barrel-title': { c: [240, 288], p: [120, 196], rope: 18 },
-    'kiro-barrel-swing': { c: [240, 288], p: [120, 205], rope: 174 },
-    'kiro-barrel-slash': { c: [240, 288], p: [120, 211], rope: 180 },
-    'kiro-barrel-duck': { c: [240, 288], p: [120, 220], rope: 196 },
-    'kiro-hang-nobarrel': { c: [156, 216], p: [78, 91], rope: 91 },
+    'kiro-barrel-idle': { c: [240, 296], p: [120, 206], rope: 165 },
+    'kiro-barrel-title': { c: [244, 316], p: [122, 218], rope: 5 },
+    'kiro-barrel-swing': { c: [312, 296], p: [156, 205], rope: 174 },
+    'kiro-barrel-slash': { c: [240, 297], p: [120, 211], rope: 170 },
+    'kiro-barrel-duck': { c: [240, 291], p: [120, 220], rope: 191 },
+    'kiro-hang-nobarrel': { c: [160, 216], p: [80, 91], rope: 91 },
     'kiro-lying-faint': { c: [360, 180], p: [180, 98] },
     'kiro-situp-proud': { c: [216, 216], p: [108, 149] },
     'tara-winch-ready': { c: [210, 270], p: [105, 264] },
@@ -55,7 +56,7 @@
       const img = new Image();
       img.onload = () => { charImg[name] = img; res(); };
       img.onerror = () => res();
-      img.src = 'assets/chars/game-3x/' + name + '.png';
+      img.src = 'assets/chars/game-6x/' + name + '.png';
     })));
   }
   const baked = {};
@@ -121,7 +122,7 @@
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.clearRect(0, 0, pw, ph);
       g.imageSmoothingEnabled = true;
-      g.imageSmoothingQuality = 'low';
+      g.imageSmoothingQuality = 'high';
       g.drawImage(img, 0, 0, pw, ph);
       slot.cssW = pw / mul;
       slot.cssH = ph / mul;
