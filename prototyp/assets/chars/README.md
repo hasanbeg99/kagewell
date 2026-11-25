@@ -1,5 +1,7 @@
 # Kagewell character sprites — chars-v1
 
+> **In use since 25.11.2026: `game-6x/`.** The game now loads the soft 3D toon set from `game-6x/` (generated with Higgsfield, GPT Image 2.6, style sample "B", then aligned so the barrel sits where the old barrel sat). Each file is drawn at twice the @3x canvas; the canvas sizes, pivots and rope points live in `CHAR_PIV` in `prototyp/game.js`, still in @3x units. Everything below describes the older chars-v1 set (`game-3x/`, `256/`, `512/`, `expressions/`), which the game no longer loads.
+
 Illustrated PNG sprites for Kiro and Tara, direction B (game-sprite crisp), following `CHARAKTER-KIRO-TARA.md` and the 23.11.2026 doc audit.
 Transparent backgrounds. Game canvases are @3x CSS sizes from the brief. Pivots are in `pivots.json` as `[x, y]` on that canvas (pixels from the top-left).
 
