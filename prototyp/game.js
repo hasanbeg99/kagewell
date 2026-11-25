@@ -59,6 +59,44 @@
       img.src = 'assets/chars/game-6x/' + name + '.png';
     })));
   }
+  // Painted shaft walls: one vertically tileable picture per biome (assets/bg/<biome>.jpg, 1170 px wide,
+  // side columns included). A biome without a picture keeps the code-drawn shaft from sprites.js.
+  const BG_PAINTED = ['moon', 'moss', 'ember', 'crystal'];
+  const bgImg = {};
+  function loadBgImages() {
+    BG_PAINTED.forEach(name => {
+      const img = new Image();
+      img.src = 'assets/bg/' + name + '.jpg';
+      // decode off the main thread before first use, so the first bake does not stall a frame
+      img.decode().then(() => { img.lh = W * img.naturalHeight / img.naturalWidth; bgImg[name] = img; }).catch(() => {});
+    });
+  }
+  // Pictures are pre-scaled once to the current backing scale, so each frame is a 1:1 copy.
+  // At most three biomes stay baked: the one on screen, the one fading in and the next one ahead.
+  const bgBaked = {};
+  let bgBakedKey = '';
+  function bgTile(name, keep) {
+    const img = bgImg[name];
+    if (!img) return null;
+    const mul = viewScale * dpr, key = mul.toFixed(3);
+    if (key !== bgBakedKey) { for (const k in bgBaked) delete bgBaked[k]; bgBakedKey = key; }
+    let c = bgBaked[name];
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(W * mul));
+      c.height = Math.max(1, Math.round(img.lh * mul));
+      c.lw = W;
+      c.lh = c.height / mul;
+      const g = c.getContext('2d');
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(img, 0, 0, c.width, c.height);
+      bgBaked[name] = c;
+      const names = Object.keys(bgBaked);
+      if (names.length > 3) for (const k of names) if (keep.indexOf(k) < 0) { delete bgBaked[k]; break; }
+    }
+    return c;
+  }
   const baked = {};
   let poseBakeKey = '';
   const NUDGE_X = { 'kiro-barrel-slash': 7, 'kiro-barrel-duck': 5.2 };
@@ -1189,13 +1227,20 @@
     };
     const far = art.bg[biomeShown] || art.bg.moon;
     const near = art.bg[name] || far;
-    tile(far, 0.16, depth, C.wall, W - C.wall * 2);
-    if (near !== far && biomeBlend < 1) {
+    const ahead = biomeAt(depth + 20 * C.pxPerMeter);
+    const keep = [biomeShown, name, ahead];
+    const pFar = bgTile(biomeShown, keep), pNear = bgTile(name, keep);
+    if (ahead !== name) bgTile(ahead, keep);
+    const painted = !!(pFar || pNear);
+    if (pFar) tile(pFar, 1, depth, 0, W);
+    else tile(far, 0.16, depth, C.wall, W - C.wall * 2);
+    if (name !== biomeShown && biomeBlend < 1) {
       ctx.globalAlpha = 1 - biomeBlend;
-      tile(near, 0.16, depth, C.wall, W - C.wall * 2);
+      if (pNear) tile(pNear, 1, depth, 0, W);
+      else tile(near, 0.16, depth, C.wall, W - C.wall * 2);
       ctx.globalAlpha = 1;
     }
-    if (art.ledge) {
+    if (art.ledge && !painted) {
       const stepF = 320;
       const f0 = (depth * 0.22 / stepF) | 0;
       for (let i = f0; i < f0 + 4; i++) {
@@ -1211,29 +1256,31 @@
         ctx.drawImage(art.ledge, C.wall + 20 + ((i * 91) & 255) % 160, sy, 140, 32);
       }
     }
-    const wallImg = (art.walls && (art.walls[name] || art.walls.moon)) || null;
-    const visWall = 50;
-    tile(wallImg, 1, depth, 0, visWall);
-    ctx.save();
-    ctx.translate(W, 0);
-    ctx.scale(-1, 1);
-    tile(wallImg, 1, depth, 0, visWall);
-    ctx.restore();
-    ctx.strokeStyle = name === 'moss' ? 'rgba(150,190,120,0.55)' : name === 'ember' ? 'rgba(180,100,60,0.4)' : 'rgba(196,165,116,0.45)';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    const stepV = 150;
-    const i0 = Math.floor(depth * 0.72 / stepV) - 1;
-    for (let i = i0; i < i0 + 12; i++) {
-      const sy = i * stepV - depth * 0.72;
-      if (sy < -30 || sy > visH) continue;
-      const left = i % 2 === 0;
-      const x = left ? C.wall + 4 : W - C.wall - 4;
-      const dir = left ? 1 : -1;
-      ctx.beginPath();
-      ctx.moveTo(x, sy);
-      ctx.bezierCurveTo(x + 22 * dir, sy + 24, x + 6 * dir, sy + 58, x + 16 * dir, sy + 92);
-      ctx.stroke();
+    if (!painted) {
+      const wallImg = (art.walls && (art.walls[name] || art.walls.moon)) || null;
+      const visWall = 50;
+      tile(wallImg, 1, depth, 0, visWall);
+      ctx.save();
+      ctx.translate(W, 0);
+      ctx.scale(-1, 1);
+      tile(wallImg, 1, depth, 0, visWall);
+      ctx.restore();
+      ctx.strokeStyle = name === 'moss' ? 'rgba(150,190,120,0.55)' : name === 'ember' ? 'rgba(180,100,60,0.4)' : 'rgba(196,165,116,0.45)';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      const stepV = 150;
+      const i0 = Math.floor(depth * 0.72 / stepV) - 1;
+      for (let i = i0; i < i0 + 12; i++) {
+        const sy = i * stepV - depth * 0.72;
+        if (sy < -30 || sy > visH) continue;
+        const left = i % 2 === 0;
+        const x = left ? C.wall + 4 : W - C.wall - 4;
+        const dir = left ? 1 : -1;
+        ctx.beginPath();
+        ctx.moveTo(x, sy);
+        ctx.bezierCurveTo(x + 22 * dir, sy + 24, x + 6 * dir, sy + 58, x + 16 * dir, sy + 92);
+        ctx.stroke();
+      }
     }
     const beam0 = Math.floor(depth / 1600) * 1600;
     for (let b = beam0; b < depth + visH; b += 1600) {
@@ -1252,6 +1299,18 @@
       ctx.drawImage(art.cone, W / 2 - 110, 0, 220, 240);
       ctx.globalAlpha = 1;
     }
+    if (painted) {
+      // the shaft fades into darkness toward the bottom of the screen, so the well reads as endless
+      if (drawWell.shadeH !== visH) {
+        const g = ctx.createLinearGradient(0, visH * 0.5, 0, visH);
+        g.addColorStop(0, 'rgba(4,10,22,0)');
+        g.addColorStop(1, 'rgba(4,10,22,0.6)');
+        drawWell.shade = g;
+        drawWell.shadeH = visH;
+      }
+      ctx.fillStyle = drawWell.shade;
+      ctx.fillRect(0, visH * 0.5, W, visH * 0.5 + 2);
+    }
     const stepL = 180;
     const L0 = Math.floor(depth / stepL) - 1;
     for (let i = L0; i < L0 + 8; i++) {
@@ -1260,7 +1319,16 @@
       const left = i % 2 === 0;
       const lx = left ? 8 : W - 36;
       const lit = art.lanternLit || art.wallGlow;
-      if (lit) {
+      if (painted && art.lantern && art.glowWarm) {
+        // on the painted walls a soft round glow reads better than the hard-edged light cone
+        const gx = left ? C.wall + 10 : W - C.wall - 10;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(art.glowWarm, gx - 70, sy + 8 - 70, 140, 140);
+        ctx.restore();
+        ctx.drawImage(art.lantern, gx - 9, sy - 6, 18, 28);
+      } else if (lit) {
         if (left) ctx.drawImage(lit, C.wall - 2, sy - 30, 132, 88);
         else {
           ctx.save();
@@ -2437,6 +2505,7 @@
   function onShow() { last = -1; acc = 0; poseBakeKey = ''; armAdapt(); resize(); }
   async function boot() {
     titleAt = performance.now();
+    loadBgImages();
     await loadCharImages();
     if (window.KWAudio && KWAudio.warmAll) { try { await KWAudio.warmAll(); } catch (e) {} }
     handed = store.get(KEY.hand, 'right') === 'left' ? 'left' : 'right';
