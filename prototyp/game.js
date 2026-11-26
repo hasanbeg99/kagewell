@@ -26,7 +26,7 @@
     portalScroll: 40, portalLerpToScroll0Ms: 400,
     hitboxSwayMax: 4, sagPx: 4, sagMs: 60,
     swordR: 72, swordWindup: 40, swordActive: 100, swordRecover: 40, swordSweepMs: 90, swordCd: 260,
-    duckMs: 120, swingWindup: 70, swingMs: 520, swingArc: 60, swingPad: 10, swingCd: 1500,
+    duckMs: 120, swingWindup: 67, swingMs: 520, swingArc: 60, swingPad: 10, swingCd: 1500,
     hitStopSword: 50, hitStopSwing: 40, swingShake: 4,
     spareStart: 1, spareMax: 3, breakInvuln: 1200, breakSpeed: 1.15,
     equipMs: 400, equipInvuln: 1000, pickupGapM: 60, pickupEveryM: 10, pickupChance: 0.25,
@@ -34,6 +34,11 @@
     faintButtonMs: 300, pointsPerMeter: 10,     coinPoints: 10, noBarrelScoreMult: 1.5, coinDropOnKillChance: 0.45
   };
   const W = 390, BH = C.barrelH, BW = C.barrelW, TAU = Math.PI * 2;
+  const WALL_DUCK_ON_INPUT = true;
+  const SWING_RESTITUTION = 0.35;
+  const ROPE_WOBBLE_MAX = 2;
+  const ROPE_EASE_MS = 220;
+  const GHOST_FADE_MS = 160;
   const SPRITE_SCALE = 1 / 3;
   const PLAY_SCALE = SPRITE_SCALE * 1.35;
   const FAINT_SCALE = 0.66;
@@ -99,10 +104,13 @@
   }
   const baked = {};
   let poseBakeKey = '';
-  const NUDGE_X = { 'kiro-barrel-slash': 7, 'kiro-barrel-duck': 5.2 };
+  // Barrel-center offset from the sprite pivot, CSS px, unmirrored art. Measured on the game-6x poses
+  // so the barrel sits on the hitbox.
+  const BARREL_DX = { 'kiro-barrel-idle': -1.8, 'kiro-barrel-slash': -9.0, 'kiro-barrel-duck': -7.1, 'kiro-barrel-swing': -2.2 };
   const NUDGE_Y = { 'kiro-barrel-slash': 2.2, 'kiro-barrel-duck': 6.2, 'kiro-barrel-swing': -0.5 };
   let poseCur = 'kiro-barrel-idle', poseOld = '', poseMix = 1;
   const PIVOT_DY = 48.5;
+  const CUT_MS = 1000;   // how long the rope cutter saws before the rope snaps (was 700)
   const hit = { x: 0, y: 0, w: 58, h: 48 };
   const pick = { x: 0, y: 0, w: 128, h: 150 };
   function pickupBox() {
@@ -203,16 +211,18 @@
   let rawDPR = 1, dpr = 1, dprLimit = CFG.dprMax, adaptN = 0;
   let state = 'title', playMs = 0, depthPx = 0, scrollV = 0, portalT = 0, portalLen = 2500, seenRun = false;
   let px = 195, py = 360, moveK = 0, holdMs = 0, coast = null, stickDir = null, axisLock = null, lastSide = 1;
-  let sagMode = 'B', visSag = 0, duckT = 0, barrel = 'intact', spares = 1, invuln = 0, equipT = 0;
+  let visSag = 0, duckT = 0, barrel = 'intact', spares = 1, invuln = 0, equipT = 0;
   let slashPhase = null, slashT = 0, slashCd = 0, slashDir = 1, slashSerial = 0, bufUntil = 0, actionLast = '';
   let swingPhase = null, swingT = 0, swingU = 0, swingCd = 0, swingFromX = 0, swingFromY = 0, swingToX = 0, swingDir = 1, swingKills = 0, swingHit = false;
+  let swingTheta = 0, swingTheta0 = 0, swingOmega = 0, swingLen = 1, swingPulleyX = 195;
+  let ropeWobble = 0, ropeWobbleV = 0, lastVx = 0, ropeAnchorFrom = 195, ropeAnchorU = 1, ropeEase = null;
   let recoil = 0, impact = 0, pressed = false, runCoins = 0, totalCoins = 0, score = 0, bestD = 0, bestS = 0;
   let combo = 1, comboAt = -1e9, playerMoved = 0, unfair = false, caused = false, firstCreep = false, knotLock = 0;
   let waveT = 0, waveN = 1, waveOn = true, attackAt = 0, lastImpact = -1e9, lastPickupM = 0, pickupRoll = -1, pickup = null;
   let coinChainAt = 0, nextCoinM = 0, creakSide = 0, ropeCd = 0, hitStop = 0, breakFlash = 0;
   let bits = [];
   let uiNoch = null, uiTitel = null;
-  let shake = 0, pauseAt = 0, titleAt = 0, biomeShown = 'moon', biomeBlend = 1, breakPop = 0;
+  let shake = 0, pauseAt = 0, titleAt = 0, biomeShown = 'moon', biomeBlend = 1, breakPop = 0, breakMsg = 0;
   const POOL = 120;
   const pool = [];
   for (let i = 0; i < POOL; i++) pool.push({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, r: 3, col: '#fff', grav: 0, px0: 0, py0: 0 });
@@ -225,7 +235,8 @@
   for (let i = 0; i < 8; i++) scarf.push({ x: 0, y: 0, ox: 0, oy: 0 });
   const dust = [];
   let joyAnchor = null, joyKnob = { dx: 0, dy: 0 }, joyFrom = null, joyTo = null, joyBack = 0, joyId = null;
-  let restX = 300, restY = 700, ringD = 128, knobD = 52, deadFrac = 0.12;
+  let restX = 300, restY = 700, ringD = 128, knobD = 52, deadFrac = 0.12, fullFrac = 0.85;
+  let stickX = 0, stickY = 0;
   let act = { x: 70, y: 760, d: 72, hit: 88 }, barrelBtn = { x: 160, y: 760, d: 58, show: false };
   let ents = [], coins = [], parts = [];
   const ghost = [{ x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 0 }];
@@ -373,9 +384,14 @@
     }
   }
   function visualRot() {
-    if (swingPhase === 'fly') return swingDir * swingU * TAU;
-    if (duckT > 0 && barrel === 'intact') return (atLeft() ? 1 : -1) * (3 * Math.PI / 180) * (duckT / C.duckMs);
+    if (duckT > 0 && barrel === 'intact' && !swingPhase) return (atLeft() ? 1 : -1) * (3 * Math.PI / 180) * (duckT / C.duckMs);
     return 0;
+  }
+  function faceDir() {
+    if (slashPhase) return slashDir < 0 ? -1 : 1;
+    if (swingPhase) return swingDir < 0 ? -1 : 1;
+    if (duckT > C.duckMs * 0.3 && atWall()) return atLeft() ? -1 : 1;
+    return 1;
   }
   function slashVisual() {
     if (!slashPhase) return 0;
@@ -410,30 +426,32 @@
     if (slashCd > 0 || slashPhase) return 'locked';
     return 'sword';
   }
-  function steer(dx, dy) {
-    const ax = Math.abs(dx), ay = Math.abs(dy);
-    const tan60 = Math.tan((45 + C.hysteresisDeg) * Math.PI / 180);
-    const tan30 = Math.tan((45 - C.hysteresisDeg) * Math.PI / 180);
-    if (!axisLock) {
-      if (ay > ax * tan60) axisLock = 'v';
-      else if (ay < ax * tan30) axisLock = 'h';
-      else return null;
-    } else if (axisLock === 'h' && ay > ax * tan60) axisLock = 'v';
-    else if (axisLock === 'v' && ay < ax * tan30) axisLock = 'h';
-    const d = axisLock === 'h' ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
-    if (d === 'left') lastSide = -1; else if (d === 'right') lastSide = 1;
-    return d;
+  function setStick(nx, ny, gain) {
+    const g = gain == null ? 1 : gain;
+    stickX = nx * g;
+    stickY = ny * g;
+    if (nx < -0.35) { stickDir = 'left'; lastSide = -1; }
+    else if (nx > 0.35) { stickDir = 'right'; lastSide = 1; }
+    else if (ny < 0) stickDir = 'up';
+    else if (ny > 0) stickDir = 'down';
+    else stickDir = null;
   }
   function readJoy() {
-    if (joyId == null || !ptrs.has(joyId) || !joyAnchor) { joyKnob = { dx: 0, dy: 0 }; return; }
+    if (joyId == null || !ptrs.has(joyId) || !joyAnchor) {
+      joyKnob = { dx: 0, dy: 0 };
+      stickX = 0; stickY = 0; stickDir = null;
+      return;
+    }
     const pr = ptrs.get(joyId);
     let dx = pr.x - joyAnchor.x, dy = pr.y - joyAnchor.y;
     const mag = Math.hypot(dx, dy), R = ringD / 2;
     if (mag > R && mag > 0) { dx *= R / mag; dy *= R / mag; }
     joyKnob = { dx: dx, dy: dy };
     const m = Math.min(mag, R);
-    if (m < R * deadFrac) { axisLock = null; stickDir = null; return; }
-    stickDir = steer(dx, dy);
+    const u = R > 0 ? m / R : 0;
+    if (u <= deadFrac || m <= 0) { stickX = 0; stickY = 0; stickDir = null; return; }
+    const gain = u >= fullFrac ? 1 : (u - deadFrac) / (fullFrac - deadFrac);
+    setStick(dx / m, dy / m, gain);
   }
 
   function onDown(e) {
@@ -449,8 +467,7 @@
     if (state === 'pause') {
       if (hitRect(p, W / 2 - L(90), visH * 0.42, L(180), L(44))) { state = 'play'; armAdapt(); KWAudio.play('ui_click'); return; }
       if (hitRect(p, W / 2 - L(90), visH * 0.52, L(180), L(44))) { KWAudio.setMuted(!KWAudio.muted); KWAudio.play('ui_click'); return; }
-      if (hitRect(p, W / 2 - L(90), visH * 0.62, L(180), L(44))) { sagMode = sagMode === 'B' ? 'A' : 'B'; KWAudio.play('ui_click'); return; }
-      if (hitRect(p, W / 2 - L(110), visH * 0.72, L(220), L(44))) {
+      if (hitRect(p, W / 2 - L(110), visH * 0.62, L(220), L(44))) {
         handed = handed === 'left' ? 'right' : 'left';
         store.set(KEY.hand, handed);
         layoutControls();
@@ -510,7 +527,7 @@
       joyFrom = { x: joyAnchor.x, y: joyAnchor.y };
       joyTo = { x: restX, y: restY };
       joyBack = 140;
-      joyId = null; joyKnob = { dx: 0, dy: 0 }; stickDir = null; axisLock = null;
+      joyId = null; joyKnob = { dx: 0, dy: 0 }; stickX = 0; stickY = 0; stickDir = null; axisLock = null;
     }
     ptrs.delete(e.pointerId);
   }
@@ -532,8 +549,8 @@
     scrollV = C.portalScroll;
   }
   function resetRun() {
-    px = W / 2; py = Math.min(360, visH * 0.46); moveK = 0; holdMs = 0; coast = null; stickDir = null; axisLock = null;
-    barrel = 'intact'; spares = C.spareStart; invuln = 0; equipT = 0; duckT = 0; visSag = 0;
+    px = W / 2; py = Math.min(360, visH * 0.46); moveK = 0; holdMs = 0; coast = null; stickX = 0; stickY = 0; stickDir = null; axisLock = null;
+    barrel = 'intact'; spares = C.spareStart; invuln = 0; equipT = 0; duckT = 0; visSag = 0; breakMsg = 0;
     slashPhase = null; slashT = 0; slashCd = 0; slashSerial++; bufUntil = 0;
     swingPhase = null; swingT = 0; swingU = 0; swingCd = 0; swingKills = 0; ghostN = 0;
     depthPx = 0; playMs = 0; score = 0; runCoins = 0; combo = 1; comboAt = -1e9;
@@ -603,11 +620,57 @@
     slashDir = slashSide(); lastSide = slashDir;
     KWAudio.play('sword_slash');
   }
+  function ropeAttachDy() {
+    const spec = CHAR_PIV[swingPhase ? 'kiro-barrel-swing' : 'kiro-barrel-idle'];
+    return ((spec.rope != null ? spec.rope : spec.p[1]) - spec.p[1]) * PLAY_SCALE;
+  }
+  function placeOnRope(theta) {
+    const ay = 8;
+    const dirx = Math.sin(theta);
+    const diry = Math.cos(theta);
+    let L = swingLen;
+    const attach = ropeAttachDy();
+    let pyTry = ay + diry * L - PIVOT_DY - attach;
+    const floor = playBottom();
+    if (pyTry > floor && diry > 0.05) {
+      const need = floor + PIVOT_DY + attach - ay;
+      L = Math.min(swingLen, Math.max(40, need / diry));
+      pyTry = ay + diry * L - PIVOT_DY - attach;
+    }
+    px = clamp(swingPulleyX + dirx * L, minX(), maxX());
+    py = clamp(pyTry, C.barrelTopMin, floor);
+  }
+  function swingLimits() {
+    const span = Math.min(swingLen * 0.98, Math.max(8, swingPulleyX - minX()));
+    const spanR = Math.min(swingLen * 0.98, Math.max(8, maxX() - swingPulleyX));
+    return { left: -Math.asin(span / swingLen), right: Math.asin(spanR / swingLen) };
+  }
   function startSwing() {
     swingPhase = 'windup'; swingT = 0; swingU = 0; swingKills = 0; swingHit = false; ghostN = 0;
     swingFromX = px; swingFromY = py; swingDir = atLeft() ? 1 : -1;
-    swingToX = swingDir > 0 ? (W - C.wall - halfW() - 4) : (C.wall + halfW() + 4);
+    ropeAnchorFrom = rx[0]; ropeAnchorU = 0; ropeEase = 'in';
+    swingPulleyX = (minX() + maxX()) * 0.5;
+    const hy = py + BH / 2 + ropeAttachDy();
+    swingLen = Math.max(80, Math.hypot(px - swingPulleyX, hy - 8));
+    swingTheta = swingTheta0 = Math.atan2(px - swingPulleyX, hy - 8);
+    const lim = swingLimits();
+    const target = clamp(-swingTheta0, lim.left, lim.right);
+    const travel = Math.max(0.2, Math.abs(target - swingTheta));
+    swingOmega = Math.sign(target - swingTheta || swingDir) * (travel / 0.48);
+    swingToX = swingDir > 0 ? maxX() : minX();
+    placeOnRope(swingTheta);
     KWAudio.play('barrel_swing');
+  }
+  function finishSwing() {
+    const struck = swingHit;
+    const k = ropeAnchorU * ropeAnchorU * (3 - 2 * ropeAnchorU);
+    ropeAnchorFrom = lerp(ropeAnchorFrom, swingPulleyX, ropeEase === 'in' ? k : 1);
+    ropeAnchorU = 0; ropeEase = 'out';
+    lastSide = swingDir < 0 ? -1 : 1;
+    px = swingDir > 0 ? maxX() : minX();
+    py = clamp(swingFromY, C.barrelTopMin, playBottom());
+    swingPhase = null; swingT = 0; swingU = 0; swingCd = C.swingCd; swingOmega = 0; ghostN = 0;
+    if (struck) hitStop = Math.max(hitStop, C.hitStopSwing);
   }
   function swordHits() {
     const sweep = slashPhase === 'recover' ? 1 : ease(clamp(slashT / C.swordSweepMs, 0, 1));
@@ -657,6 +720,7 @@
       barrel = 'broken'; invuln = C.breakInvuln;
       breakFlash = 70;
       breakPop = 1;
+      breakMsg = 1300;
       bits = [];
       for (let i = 0; i < 10; i++) bits.push({ x: px, y: py + 30, vx: Math.cos(i) * (80 + i * 12), vy: -40 - i * 18, a: i, wood: true, life: 900 });
       bits.push({ x: px - 8, y: py + 24, vx: -90, vy: -80, a: 0, ring: true, life: 900 });
@@ -701,7 +765,8 @@
     });
   }
   function spawnBat(screenY) {
-    const side = rng() < 0.5 ? -1 : 1;
+    // come in from the far side, so the bat is on screen for a while before it can reach Kiro
+    const side = Math.abs(px - W / 2) > 40 ? (px < W / 2 ? 1 : -1) : (rng() < 0.5 ? -1 : 1);
     ents.push({
       kind: 'bat', side: side, x: side < 0 ? -20 : W + 20, y: screenY, worldY: depthPx + screenY,
       state: 'aim', t: 0, hp: 1, alive: true, points: 20, vx: 0, vy: 0, hitT: 0, slashId: -1, mode: 'cross'
@@ -716,9 +781,10 @@
     });
   }
   function spawnCutter() {
+    const side = rng() < 0.5 ? -1 : 1;
     ents.push({
-      kind: 'cutter', x: px + (rng() < 0.5 ? -28 : 28), y: 80, worldY: depthPx + 40,
-      state: 'descend', t: 0, hp: 1, alive: true, points: 50, hitT: 0, slashId: -1, side: 1
+      kind: 'cutter', x: px + side * 28, y: 80, worldY: depthPx + 40,
+      state: 'descend', t: 0, hp: 1, alive: true, points: 50, hitT: 0, slashId: -1, side: side
     });
   }
   function aliveAttacks() {
@@ -800,8 +866,12 @@
         if ((e.state === 'lunge' || e.state === 'hold') && !e.harmless && overlap(bodyBox(), hazardBox(e))) hurt(e);
       } else if (e.kind === 'bat') {
         if (e.state === 'aim') {
+          // fly in to a hover point inside the shaft, then aim; the dive only starts once it has been visible
+          const hoverX = e.side < 0 ? C.wall + 50 : W - C.wall - 50;
+          const startX = e.side < 0 ? -20 : W + 20;
+          e.x = lerp(startX, hoverX, ease(clamp(e.t / 300, 0, 1)));
           e.y += (py - 20 - e.y) * Math.min(1, dt / 400);
-          if (e.t > Math.max(450, 600 - depthM() * 0.5)) { e.state = 'dive'; e.t = 0; const a = Math.atan2((py + 30) - e.y, px - e.x); e.vx = Math.cos(a) * 220; e.vy = Math.sin(a) * 220; KWAudio.play('swipe'); }
+          if (e.t > Math.max(700, 850 - depthM() * 0.5)) { e.state = 'dive'; e.t = 0; const a = Math.atan2((py + 30) - e.y, px - e.x); e.vx = Math.cos(a) * 220; e.vy = Math.sin(a) * 220; KWAudio.play('swipe'); }
         } else if (e.state === 'dive') {
           e.x += e.vx * dt / 1000; e.y += e.vy * dt / 1000;
           if (Math.hypot(e.x - px, e.y - (py + 30)) < 28) hurt(e);
@@ -812,12 +882,16 @@
         if (e.state === 'grow') { e.ext = e.reach * ease(clamp(e.t / 500, 0, 1)); if (e.t >= 500) e.state = 'out'; }
         if (e.ext > 16 && overlap(bodyBox(), hazardBox(e))) hurt(e);
       } else if (e.kind === 'cutter') {
+        // the rope runs from its top anchor (ropeAx, 8) down to Kiro; the cutter climbs down along it
+        const ropeXAt = yy => lerp(ropeAx, px, clamp((yy - 8) / Math.max(1, py - 8), 0, 1));
         if (e.state === 'descend') {
-          e.y += dt * 0.12; e.x = ropeAx + (e.x < px ? -28 : 28);
+          e.y += dt * 0.12; e.x = ropeXAt(e.y) + e.side * 28;
           if (Math.abs(e.y - (py - 10)) < 16) { e.state = 'perch'; e.t = 0; }
-        } else if (e.state === 'perch' && e.t > 200) { e.state = 'cut'; e.t = 0; KWAudio.loop('rope_cutting', true); }
-        else if (e.state === 'cut') {
-          if (e.t > 700) { KWAudio.loop('rope_cutting', false); hurt({ force: true }); e.alive = false; }
+        } else {
+          // once it sits on the rope it rides along with Kiro, so it stays where the player is looking
+          e.y = py - 10; e.x = ropeXAt(e.y) + e.side * 28;
+          if (e.state === 'perch' && e.t > 200) { e.state = 'cut'; e.t = 0; KWAudio.loop('rope_cutting', true); }
+          else if (e.state === 'cut' && e.t > CUT_MS) { KWAudio.loop('rope_cutting', false); hurt({ force: true }); e.alive = false; }
         }
         if (Math.hypot(e.x - px, e.y - (py - 0.18 * BH)) < C.swordR) { /* vulnerable: swordHits handles it */ }
       }
@@ -913,10 +987,10 @@
   }
 
   function barrelSway() {
-    if (state !== 'play' && state !== 'portal') return 0;
+    if ((state !== 'play' && state !== 'portal') || swingPhase) return 0;
     const t = playMs / 1000;
     const nearTop = Math.max(0, 1 - Math.min(1, depthM() / 14));
-    return Math.sin(t * (1.5 + nearTop * 0.8)) * C.hitboxSwayMax;
+    return Math.sin(t * (1.5 + nearTop * 0.8)) * C.hitboxSwayMax + ropeWobble;
   }
   function poseName() {
     if (barrel === 'broken') return 'kiro-hang-nobarrel';
@@ -943,27 +1017,23 @@
     }
   }
   function ropeStep(dt, bx, by) {
-    const ax = ropeAx, ay = 8;
-    ropeAx += (px - ropeAx) * Math.min(1, dt / 160);
-    const dist = Math.max(40, Math.hypot(bx - ax, by - ay));
-    const slack = (coast === 'up' && moveK > 0) ? 1.065 : 1;
-    const rest = dist * slack / SEG;
-    ropeAcc += dt;
-    let n = 0;
-    while (ropeAcc >= 8 && n < 5) {
-      ropeAcc -= 8; n++;
-      for (let i = 1; i < SEG; i++) {
-        const vx = (rx[i] - ox[i]) * 0.98, vy = (ry[i] - oy[i]) * 0.98;
-        ox[i] = rx[i]; oy[i] = ry[i]; rx[i] += vx; ry[i] += vy;
-      }
-      for (let it = 0; it < 3; it++) {
-        rx[0] = ax; ry[0] = ay; rx[SEG] = bx; ry[SEG] = by;
-        for (let i = 0; i < SEG; i++) {
-          const dx = rx[i + 1] - rx[i], dy = ry[i + 1] - ry[i], d = Math.hypot(dx, dy) || 1, diff = (d - rest) / d;
-          if (i) { rx[i] += dx * diff * 0.5; ry[i] += dy * diff * 0.5; }
-          if (i + 1 < SEG) { rx[i + 1] -= dx * diff * 0.5; ry[i + 1] -= dy * diff * 0.5; }
-        }
-      }
+    let ax = bx;
+    if (ropeEase === 'in') {
+      ropeAnchorU = Math.min(1, ropeAnchorU + dt / ROPE_EASE_MS);
+      const k = ropeAnchorU * ropeAnchorU * (3 - 2 * ropeAnchorU);
+      ax = lerp(ropeAnchorFrom, swingPulleyX, k);
+    } else if (ropeEase === 'out') {
+      ropeAnchorU = Math.min(1, ropeAnchorU + dt / ROPE_EASE_MS);
+      const k = ropeAnchorU * ropeAnchorU * (3 - 2 * ropeAnchorU);
+      ax = lerp(ropeAnchorFrom, bx, k);
+      if (ropeAnchorU >= 1) ropeEase = null;
+    } else ropeAnchorFrom = bx;
+    const ay = 8;
+    ropeAx = ax;
+    for (let i = 0; i <= SEG; i++) {
+      const k = i / SEG;
+      rx[i] = lerp(ax, bx, k);
+      ry[i] = lerp(ay, by, k);
     }
   }
 
@@ -976,54 +1046,76 @@
       else scrollV = Math.min(C.scrollMax, scrollV + C.scrollAcc * dt / 1000);
     }
     depthPx += scrollV * dt / 1000;
-    const dir = stickDir;
-    if (dir) {
-      if (dir !== coast) { holdMs = 0; moveK = C.inputStart; if (dir === 'up' && sagMode === 'B') visSag = C.sagPx; }
-      else { holdMs += dt; moveK = C.inputStart + (1 - C.inputStart) * clamp(holdMs / C.inputFullMs, 0, 1); }
-      coast = dir;
-    } else if (moveK > 0) { moveK = Math.max(0, moveK - dt / C.inputReleaseMs); if (moveK === 0) coast = null; }
-    if (!swingPhase && (state === 'play' || state === 'portal')) {
-      const d = dir || (moveK > 0 ? coast : null);
+    const gain = Math.hypot(stickX, stickY);
+    moveK = gain;
+    const goingUp = stickY < -0.2;
+    if (gain > 0.04) coast = goingUp ? 'up' : (stickY > 0.2 ? 'down' : (stickX < 0 ? 'left' : 'right'));
+    else coast = null;
+    if (!swingPhase && (state === 'play' || state === 'portal') && gain > 0.001) {
+      const nx = stickX / gain, ny = stickY / gain;
+      const sx = C.speedSide;
+      const sy = ny < 0 ? C.speedUp : C.speedDown;
+      const speed = gain / Math.hypot(nx / sx, ny / sy);
       const mul = speedMul();
-      let vx = 0, vy = 0;
-      if (d === 'left') vx = -C.speedSide * moveK * mul;
-      else if (d === 'right') vx = C.speedSide * moveK * mul;
-      else if (d === 'down') vy = C.speedDown * moveK * mul;
-      else if (d === 'up') vy = -C.speedUp * moveK * mul;
+      const vx = nx * speed * mul;
+      const vy = ny * speed * mul;
       const oxp = px, oyp = py;
       px = clamp(px + vx * dt / 1000, minX(), maxX());
       py = clamp(py + vy * dt / 1000, C.barrelTopMin, playBottom());
+      if (Math.abs(lastVx) > 240 && Math.abs(vx) < 80) ropeWobble = clamp(ropeWobble + clamp(lastVx * 0.005, -ROPE_WOBBLE_MAX, ROPE_WOBBLE_MAX), -ROPE_WOBBLE_MAX, ROPE_WOBBLE_MAX);
+      lastVx = vx;
       playerMoved += Math.hypot(px - oxp, py - oyp);
       if (playerMoved > 80) caused = true;
-      if (d === 'up' && KWAudio.creakOk()) KWAudio.play('rope_retract');
-      if (d === 'down' && playMs - creakSide > 500) { creakSide = playMs; KWAudio.play('rope_extend'); }
-      if ((d === 'up' || Math.abs(px - ropeAx) > 20) && KWAudio.creakOk()) KWAudio.play('rope_creak');
+      if (ny < -0.35 && KWAudio.creakOk()) KWAudio.play('rope_retract');
+      if (ny > 0.35 && playMs - creakSide > 500) { creakSide = playMs; KWAudio.play('rope_extend'); }
+      if ((ny < -0.35 || Math.abs(px - ropeAx) > 20) && KWAudio.creakOk()) KWAudio.play('rope_creak');
+    } else if (!swingPhase && lastVx !== 0) {
+      if (Math.abs(lastVx) > 40) ropeWobble = clamp(ropeWobble + clamp(lastVx * 0.005, -ROPE_WOBBLE_MAX, ROPE_WOBBLE_MAX), -ROPE_WOBBLE_MAX, ROPE_WOBBLE_MAX);
+      lastVx = 0;
     }
-    visSag = Math.max(0, visSag - C.sagPx * (dt / C.sagMs));
-    const wantDuck = barrel === 'intact' && atWall();
+    visSag = 0;
+    const pushingWall = atLeft() ? stickX < -0.45 : stickX > 0.45;
+    const wantDuck = barrel === 'intact' && atWall() && !swingPhase && (!WALL_DUCK_ON_INPUT || pushingWall);
     if (wantDuck) duckT = Math.min(C.duckMs, duckT + dt); else duckT = Math.max(0, duckT - dt);
     if (swingPhase === 'windup') {
       swingT += dt;
-      if (swingT >= C.swingWindup) { swingPhase = 'fly'; swingT = 0; }
-    } else if (swingPhase === 'fly') {
-      swingT += dt; swingU = clamp(swingT / C.swingMs, 0, 1);
-      px = lerp(swingFromX, swingToX, swingU);
-      py = swingFromY - Math.sin(swingU * Math.PI) * C.swingArc;
-      if (ghostN < 3 && (ghostN === 0 || swingT - ghost[ghostN - 1].t >= 70)) {
-        const g = ghost[ghostN++];
-        g.x = px; g.y = py; g.t = swingT;
+      if (swingT >= C.swingWindup) { swingPhase = 'fly'; swingT = 0; ghostN = 0; }
+    } else if (swingPhase === 'fly' || swingPhase === 'bounce') {
+      const step = dt / 1000;
+      const lim = swingLimits();
+      if (swingPhase === 'fly') {
+        swingTheta += swingOmega * step;
+        const hitRight = swingOmega > 0 && swingTheta >= lim.right;
+        const hitLeft = swingOmega < 0 && swingTheta <= lim.left;
+        if (hitRight || hitLeft) {
+          swingTheta = hitRight ? lim.right : lim.left;
+          swingOmega = -swingOmega * SWING_RESTITUTION;
+          swingPhase = 'bounce';
+          impact = 1;
+          KWAudio.play('barrel_land');
+          shake = Math.max(shake, 3.5);
+          burst(px, py + BH / 2, 8, '#E0A868', 90, 360, 280);
+        }
+      } else {
+        const rest = clamp(-swingTheta0, lim.left, lim.right);
+        swingOmega += (-28 * (swingTheta - rest) - 8 * swingOmega) * step;
+        swingTheta += swingOmega * step;
+        if (swingTheta > lim.right) { swingTheta = lim.right; if (swingOmega > 0) swingOmega = 0; }
+        if (swingTheta < lim.left) { swingTheta = lim.left; if (swingOmega < 0) swingOmega = 0; }
+        if (Math.abs(swingTheta - rest) < 0.02 && Math.abs(swingOmega) < 0.25) finishSwing();
       }
-      const hb = bodyBox();
-      swingBox.x = hb.x - C.swingPad; swingBox.y = hb.y - C.swingPad;
-      swingBox.w = hb.w + C.swingPad * 2; swingBox.h = hb.h + C.swingPad * 2;
-      const box = swingBox;
-      for (const e of ents) if (e.alive && e.hp < 1e8 && e.kind !== 'hazard' && overlap(box, { x: e.x - 20, y: e.y - 16, w: 40, h: 32 })) kill(e, swingDir, true);
-      if (swingT >= C.swingMs) {
-        px = swingToX; py = swingFromY; swingPhase = null; swingCd = C.swingCd; impact = 1; duckT = C.duckMs;
-        ghostN = 0;
-        KWAudio.play('barrel_land');
-        shake = Math.max(shake, 3.5);
-        if (swingHit) hitStop = Math.max(hitStop, C.hitStopSwing);
+      if (swingPhase) {
+        placeOnRope(swingTheta);
+        swingT += dt; swingU = clamp(Math.abs(swingTheta) / 0.6, 0, 1);
+        if (swingPhase === 'fly' && ghostN < 3 && (ghostN === 0 || swingT - ghost[ghostN - 1].t >= 70)) {
+          const g = ghost[ghostN++];
+          g.x = px; g.y = py; g.t = swingT; g.face = swingDir < 0 ? -1 : 1;
+        }
+        const hb = bodyBox();
+        swingBox.x = hb.x - C.swingPad; swingBox.y = hb.y - C.swingPad;
+        swingBox.w = hb.w + C.swingPad * 2; swingBox.h = hb.h + C.swingPad * 2;
+        for (const e of ents) if (e.alive && e.hp < 1e8 && e.kind !== 'hazard' && overlap(swingBox, { x: e.x - 20, y: e.y - 16, w: 40, h: 32 })) kill(e, swingDir, true);
+        if (swingT > 1600) finishSwing();
       }
     }
     if (slashPhase === 'windup') { slashT += dt; if (slashT >= C.swordWindup) { slashPhase = 'active'; slashT = 0; } }
@@ -1049,6 +1141,7 @@
     KWAudio.setMusic(tier);
     tryAction();
     breakFlash = Math.max(0, breakFlash - dt);
+    breakMsg = Math.max(0, breakMsg - dt);
     if (breakPop > 0) breakPop = Math.max(0, breakPop - dt / 180);
     if (hudCoinT > 0) hudCoinT = Math.max(0, hudCoinT - dt / 160);
     if (hudSpareT > 0) hudSpareT = Math.max(0, hudSpareT - dt / 160);
@@ -1063,7 +1156,10 @@
     }
     bits.length = bi;
     dustStep(dt);
-    const grip = harnessOf(px, py, visualRot(), sagMode === 'B' ? visSag : 0);
+    ropeWobbleV += -ropeWobble * 40 * dt / 1000;
+    ropeWobbleV *= Math.pow(0.04, dt / 160);
+    ropeWobble = clamp(ropeWobble + ropeWobbleV * dt / 1000, -ROPE_WOBBLE_MAX, ROPE_WOBBLE_MAX);
+    const grip = harnessOf(px, py, 0, 0);
     ropeStep(dt, grip.x, grip.y);
     if (joyBack > 0 && joyFrom) {
       joyBack -= dt;
@@ -1087,9 +1183,12 @@
     if (bot && state === 'play') botTick();
   }
   function botTick() {
-    if (bot === 'passive') { stickDir = null; return; }
+    if (bot === 'passive') { stickX = 0; stickY = 0; stickDir = null; return; }
     if (bot === 'random') {
-      if (rng() < 0.05) stickDir = ['left', 'right', 'up', 'down'][(rng() * 4) | 0];
+      if (rng() < 0.05) {
+        const d = ['left', 'right', 'up', 'down'][(rng() * 4) | 0];
+        setStick(d === 'left' ? -1 : d === 'right' ? 1 : 0, d === 'up' ? -1 : d === 'down' ? 1 : 0, 1);
+      }
       if (rng() < 0.02) { queuedAction = predict(); bufUntil = queuedAction === 'locked' ? 0 : performance.now() + C.actionBufferMs; tryAction(); }
       return;
     }
@@ -1097,10 +1196,10 @@
     for (const e of ents) if (e.alive && (e.state === 'windup' || e.state === 'lunge' || e.state === 'dive')) {
       const d = Math.abs(e.y - py); if (d < bd) { bd = d; threat = e; }
     }
-    if (threat && bd < 110) stickDir = threat.y > py + 8 ? 'up' : 'down';
-    else if (px < W * 0.38) stickDir = 'right';
-    else if (px > W * 0.62) stickDir = 'left';
-    else stickDir = (playMs / 700 | 0) % 2 ? 'up' : 'down';
+    if (threat && bd < 110) setStick(0, threat.y > py + 8 ? -1 : 1, 1);
+    else if (px < W * 0.38) setStick(1, 0, 1);
+    else if (px > W * 0.62) setStick(-1, 0, 1);
+    else setStick(0, (playMs / 700 | 0) % 2 ? -1 : 1, 1);
     if (threat && Math.abs(threat.x - px) < C.swordR && Math.abs(threat.y - py) < 90) {
       queuedAction = predict();
       bufUntil = queuedAction === 'locked' ? 0 : performance.now() + 120;
@@ -1110,7 +1209,7 @@
 
   function scarfStep(dt) {
     const side = lastSide || 1;
-    const neck = harnessOf(px, py, 0, sagMode === 'B' ? visSag : 0);
+    const neck = harnessOf(px, py, 0, 0);
     const ax = neck.x - side * 26, ay = neck.y - 16;
     if (!scarf[0].y) { for (let i = 0; i < scarf.length; i++) { scarf[i].x = scarf[i].ox = ax - side * i * 6; scarf[i].y = scarf[i].oy = ay + i * 2; } }
     const rest = 8;
@@ -1283,7 +1382,8 @@
       }
     }
     const beam0 = Math.floor(depth / 1600) * 1600;
-    for (let b = beam0; b < depth + visH; b += 1600) {
+    // the flat 100 m beam reads like an obstacle on the painted walls, so it is only drawn without them
+    for (let b = beam0; !painted && b < depth + visH; b += 1600) {
       if (b <= 0) continue;
       const sy = b - depth;
       if (sy > -16 && sy < visH) {
@@ -1397,18 +1497,21 @@
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
-  function drawPoseAt(name, x, y, alpha) {
+  function drawPoseAt(name, x, y, alpha, face) {
     if (!baked[name]) return;
-    const nx = NUDGE_X[name] || 0;
+    const artDx = BARREL_DX[name] || 0;
     const ny = NUDGE_Y[name] || 0;
     const prevA = ctx.globalAlpha;
+    ctx.save();
     ctx.globalAlpha = prevA * alpha;
-    drawBaked(name, x + nx, y + ny);
-    ctx.globalAlpha = prevA;
+    ctx.translate(x, y);
+    if (face < 0 && name !== 'kiro-barrel-idle') ctx.scale(-1, 1);
+    drawBaked(name, -artDx, ny);
+    ctx.restore();
   }
   function drawPlayer(alpha) {
     const x = lerpA(prev.px, px, alpha) + barrelSway();
-    const y = lerpA(prev.py, py, alpha) + PIVOT_DY + lerpA(prev.sag, visSag, alpha);
+    const y = lerpA(prev.py, py, alpha) + PIVOT_DY;
     const hidden = barrel === 'broken' && invuln > 0 && ((invuln / 70) | 0) % 2 === 0;
     const pop = breakPop > 0 ? 1 + Math.sin(breakPop * Math.PI) * 0.16 : 1;
     ctx.save();
@@ -1421,7 +1524,7 @@
       ctx.drawImage(art.shadow, x - 8 + lean * 2.2, y + 26, 84, 30);
       ctx.globalAlpha = 1;
     }
-    if (art && art.rim) {
+    if (art && art.rim && !baked['kiro-barrel-idle']) {
       ctx.globalAlpha = 0.8;
       ctx.drawImage(art.rim, x - 42, y - 76, 84, 40);
       ctx.globalAlpha = 1;
@@ -1433,8 +1536,9 @@
       ctx.translate(-x, -(y + 20));
     }
     if (hidden) ctx.globalAlpha *= 0.45;
-    if (poseOld && poseMix < 1) drawPoseAt(poseOld, x, y, 1 - poseMix);
-    drawPoseAt(poseCur, x, y, poseOld && poseMix < 1 ? poseMix : 1);
+    const face = faceDir();
+    if (poseOld && poseMix < 1) drawPoseAt(poseOld, x, y, 1 - poseMix, face);
+    drawPoseAt(poseCur, x, y, poseOld && poseMix < 1 ? poseMix : 1, face);
     if (breakFlash > 40) {
       ctx.globalAlpha = clamp((breakFlash - 40) / 50, 0, 0.45);
       ctx.fillStyle = '#FFFFFF';
@@ -1529,17 +1633,19 @@
     bakeFoes();
     const ext = lerpA(e.pext || 0, e.ext || 0, alpha);
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
-    const side = e.side < 0 ? -1 : 1;
-    const inner = side < 0 ? C.wall : W - C.wall;
-    const reach = 58 + ext;
-    const headX = inner + side * reach;
+    // dir points from the wall into the shaft, the same way the hit box (hazardBox) reaches
+    const dir = e.side < 0 ? 1 : -1;
+    const inner = e.side < 0 ? C.wall : W - C.wall;
     const wind = e.state === 'windup' ? Math.sin(clamp(e.t / 320, 0, 1) * Math.PI) * 14 : 0;
-    const segs = 6;
+    const headX = inner + dir * (30 + ext - wind * 0.6);
+    const baseX = inner - dir * 6;
+    const len = Math.abs(headX - baseX);
+    const segs = 4 + Math.round(len / 24);
     for (let i = 0; i <= segs; i++) {
       const t = i / segs;
-      const x = lerpA(inner + side * 8, headX, t);
+      const x = lerpA(baseX, headX, t);
       const yy = y + Math.sin(t * Math.PI) * (-6 - wind * 0.4);
-      const rad = 8 + t * 9;
+      const rad = 9 + t * 8;
       const spr = i % 2 ? foe.a : foe.b;
       ctx.drawImage(spr, x - rad, yy - rad, rad * 2, rad * 2);
     }
@@ -1547,8 +1653,7 @@
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     for (let i = 1; i < segs; i++) {
-      const t = i / segs;
-      const x = lerpA(inner + side * 8, headX, t);
+      const x = lerpA(baseX, headX, i / segs);
       ctx.beginPath();
       ctx.moveTo(x, y + 8);
       ctx.lineTo(x - 7, y + 18);
@@ -1557,16 +1662,19 @@
       ctx.stroke();
     }
     ctx.fillStyle = '#FFE7B0';
-    ctx.beginPath(); ctx.arc(headX + side * 6, y - 12 - wind * 0.2, 5, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(headX + dir * 6, y - 12 - wind * 0.2, 5, 0, TAU); ctx.fill();
     ctx.fillStyle = e.state === 'windup' ? '#FF5A2A' : '#E23B16';
-    ctx.beginPath(); ctx.arc(headX + side * 7, y - 12 - wind * 0.2, 2.4, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(headX + dir * 7, y - 12 - wind * 0.2, 2.4, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#1B2028';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(headX + dir * 14, y - 2);
+    ctx.lineTo(headX + dir * 26, y - 10);
+    ctx.moveTo(headX + dir * 14, y + 6);
+    ctx.lineTo(headX + dir * 26, y + 8);
+    ctx.stroke();
     ctx.strokeStyle = '#E6EDF5';
     ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(headX + side * 14, y - 2);
-    ctx.lineTo(headX + side * 26, y - 10);
-    ctx.moveTo(headX + side * 14, y + 6);
-    ctx.lineTo(headX + side * 26, y + 8);
     ctx.stroke();
     if (e.state === 'windup') {
       ctx.globalAlpha = 0.35 + 0.25 * Math.sin(performance.now() / 80);
@@ -1579,43 +1687,64 @@
     const x = lerpA(e.px0 == null ? e.x : e.px0, e.x, alpha);
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
     const flap = Math.sin(performance.now() / 70 + x * 0.02);
+    if (e.alive && e.state === 'aim' && e.t > 250 && art && art.glowWarm) {
+      ctx.globalAlpha = 0.3 + 0.25 * Math.sin(performance.now() / 70);
+      ctx.drawImage(art.glowWarm, x - 40, y - 34, 80, 80);
+      ctx.globalAlpha = 1;
+    }
     ctx.drawImage(foe.bat, x - 52, y - 28 + flap * 3, 104, 62);
   }
   function drawHazard(e, alpha) {
     const ext = lerpA(e.pext || 0, e.ext || 0, alpha);
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
-    const side = e.side < 0 ? -1 : 1;
-    const inner = side < 0 ? C.wall : W - C.wall;
+    const dir = e.side < 0 ? 1 : -1;
+    const inner = e.side < 0 ? C.wall : W - C.wall;
     const len = Math.max(18, ext);
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     if (e.vine) {
-      ctx.strokeStyle = '#2F6A48';
-      ctx.lineWidth = 10;
       ctx.beginPath();
-      ctx.moveTo(inner, y);
-      ctx.quadraticCurveTo(inner + side * len * 0.5, y - 16, inner + side * len, y + 2);
+      ctx.moveTo(inner - dir * 4, y);
+      ctx.quadraticCurveTo(inner + dir * len * 0.5, y - 16, inner + dir * len, y + 2);
+      ctx.strokeStyle = '#10261A';
+      ctx.lineWidth = 14;
       ctx.stroke();
-      ctx.strokeStyle = '#8FBF7A';
+      ctx.strokeStyle = '#3E8A56';
+      ctx.lineWidth = 9;
+      ctx.stroke();
+      ctx.strokeStyle = '#A6DA8E';
       ctx.lineWidth = 3;
       ctx.stroke();
-      ctx.fillStyle = '#DDE8D4';
       for (let i = 1; i <= 4; i++) {
-        const x = inner + side * (len * i / 4);
+        const x = inner + dir * (len * i / 4);
         ctx.beginPath();
         ctx.moveTo(x, y - 2);
-        ctx.lineTo(x + side * 8, y - 12);
-        ctx.lineTo(x + side * 4, y);
+        ctx.lineTo(x + dir * 8, y - 13);
+        ctx.lineTo(x + dir * 4, y);
+        ctx.closePath();
+        ctx.fillStyle = '#F2F6EC';
         ctx.fill();
+        ctx.strokeStyle = '#10261A';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       }
     } else {
-      ctx.fillStyle = '#8A93A2';
-      for (let i = 0; i < 4; i++) {
-        const x = inner + side * (10 + i * len / 4);
+      ctx.fillStyle = '#2A2F3A';
+      traceRound(Math.min(inner - dir * 4, inner + dir * (len + 4)), y + 6, len + 8, 8, 3);
+      ctx.fill();
+      const n = Math.max(3, Math.round(len / 18));
+      for (let i = 0; i < n; i++) {
+        const x = inner + dir * (4 + i * (len - 20) / (n - 1));
         ctx.beginPath();
         ctx.moveTo(x, y + 10);
-        ctx.lineTo(x + side * 6, y - 16 - (i % 2) * 6);
-        ctx.lineTo(x + side * 16, y + 10);
+        ctx.lineTo(x + dir * 7, y - 18 - (i % 2) * 6);
+        ctx.lineTo(x + dir * 16, y + 10);
+        ctx.closePath();
+        ctx.fillStyle = '#D9E0EA';
         ctx.fill();
+        ctx.strokeStyle = '#1A1F28';
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
     }
   }
@@ -1624,20 +1753,40 @@
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
     ctx.save();
     ctx.translate(x, y);
-    ctx.fillStyle = '#3E7A3A';
+    if (e.alive && (e.state === 'perch' || e.state === 'cut')) {
+      const u = e.state === 'cut' ? clamp(e.t / CUT_MS, 0, 1) : 0;
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
+      ctx.strokeStyle = 'rgba(255,70,60,' + (0.35 + 0.35 * pulse) + ')';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, 27, 0, TAU); ctx.stroke();
+      if (u > 0) {
+        ctx.strokeStyle = '#FF4A3D';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(0, 0, 27, -Math.PI / 2, -Math.PI / 2 + TAU * u); ctx.stroke();
+      }
+    }
+    const k = 1.35;
+    ctx.scale(e.side < 0 ? -k : k, k);
+    ctx.fillStyle = '#132313';
+    ctx.beginPath(); ctx.ellipse(0, 0, 18, 14, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#4C9A45';
     ctx.beginPath(); ctx.ellipse(0, 0, 16, 12, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#8FCB78';
+    ctx.fillStyle = '#A6E08E';
     ctx.beginPath(); ctx.ellipse(-4, -4, 6, 3, -0.4, 0, TAU); ctx.fill();
-    ctx.strokeStyle = '#E6EDF2';
-    ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
-    const open = e.state === 'cut' ? 0.5 : 0.2;
+    const open = e.state === 'cut' ? 0.25 + 0.25 * Math.sin(performance.now() / 45) : 0.2;
     ctx.beginPath();
     ctx.moveTo(-6, 2); ctx.lineTo(-18, 2 - open * 16);
     ctx.moveTo(-6, 6); ctx.lineTo(-18, 6 + open * 16);
+    ctx.strokeStyle = '#132313';
+    ctx.lineWidth = 5;
     ctx.stroke();
-    ctx.fillStyle = '#F4F1C8';
-    ctx.beginPath(); ctx.arc(6, -2, 2.2, 0, TAU); ctx.arc(6, 4, 2.2, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#F2F6F8';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = '#FFF3B0';
+    ctx.beginPath(); ctx.arc(6, -2, 2.4, 0, TAU); ctx.arc(6, 4, 2.4, 0, TAU); ctx.fill();
     ctx.restore();
   }
   function drawEnt(e, alpha) {
@@ -1716,13 +1865,15 @@
       const sy = pickup.worldY - depth;
       ctx.drawImage(art.barrelIcon, pickup.x - 16, sy - 20, 32, 36);
     }
-    for (const e of ents) drawEnt(e, alpha);
+    for (const e of ents) if (e.kind !== 'cutter') drawEnt(e, alpha);
     if (swingPhase === 'fly' && ghostN && baked['kiro-barrel-swing']) {
       for (let i = 0; i < ghostN; i++) {
         const g = ghost[i];
+        const fade = 1 - (swingT - g.t) / GHOST_FADE_MS;
+        if (fade <= 0) continue;
         ctx.save();
-        ctx.globalAlpha = 0.14 + i * 0.05;
-        drawBaked('kiro-barrel-swing', g.x, g.y + PIVOT_DY);
+        ctx.globalAlpha = fade * 0.32;
+        drawPoseAt('kiro-barrel-swing', g.x, g.y + PIVOT_DY, 1, g.face || 1);
         ctx.restore();
       }
     }
@@ -1737,7 +1888,50 @@
     drawBits(alpha);
     drawPlayer(alpha);
     drawSword(alpha);
+    // the rope cutter sits at head height on the rope, so it is drawn in front of Kiro
+    for (const e of ents) if (e.kind === 'cutter') drawEnt(e, alpha);
     drawParts(alpha);
+    drawDanger(alpha);
+  }
+  // Without the barrel the next hit ends the run: a slow red edge pulse says so, and the break itself is named.
+  function drawDanger(alpha) {
+    if (barrel !== 'broken' || (state !== 'play' && state !== 'pause')) return;
+    // four edge strips instead of a full-screen gradient: same look, a fraction of the pixels
+    const E = 56;
+    if (drawDanger.h !== visH) {
+      const mk = (x0, y0, x1, y1) => { const g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, 'rgba(255,40,40,0.55)'); g.addColorStop(1, 'rgba(255,40,40,0)'); return g; };
+      drawDanger.g = [mk(0, 0, 0, E), mk(0, visH, 0, visH - E), mk(0, 0, E, 0), mk(W, 0, W - E, 0)];
+      drawDanger.h = visH;
+    }
+    const g = drawDanger.g;
+    ctx.globalAlpha = 0.4 + 0.25 * Math.sin(performance.now() / 260);
+    ctx.fillStyle = g[0]; ctx.fillRect(0, 0, W, E);
+    ctx.fillStyle = g[1]; ctx.fillRect(0, visH - E, W, E);
+    ctx.fillStyle = g[2]; ctx.fillRect(0, E, E, visH - 2 * E);
+    ctx.fillStyle = g[3]; ctx.fillRect(W - E, E, E, visH - 2 * E);
+    ctx.globalAlpha = 1;
+    if (breakMsg > 0) {
+      const x = clamp(lerpA(prev.px, px, alpha), 112, W - 112), y = lerpA(prev.py, py, alpha) - 34 - (1300 - breakMsg) * 0.02;
+      ctx.globalAlpha = clamp(breakMsg / 400, 0, 1);
+      font(22);
+      ctx.textAlign = 'center';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#1A0E10';
+      ctx.strokeText('Fass kaputt!', x, y);
+      ctx.fillStyle = '#FFD7C2';
+      ctx.fillText('Fass kaputt!', x, y);
+      if (spares > 0) {
+        font(15);
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 5;
+        ctx.strokeText('Ersatzfass-Knopf drücken', x, y + 22);
+        ctx.fillStyle = '#FFE68A';
+        ctx.fillText('Ersatzfass-Knopf drücken', x, y + 22);
+      }
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
+    }
   }
   function speaker(x, y, muted) {
     ctx.strokeStyle = muted ? '#8B93A6' : '#F4F1EA';
@@ -1839,10 +2033,10 @@
       ctx.arc(a.x + dx, a.y + dy, on ? 5 : 3.5, 0, TAU);
       ctx.fill();
     };
-    chev(0, -Rnotch, stickDir === 'up');
-    chev(0, Rnotch, stickDir === 'down');
-    chev(-Rnotch, 0, stickDir === 'left');
-    chev(Rnotch, 0, stickDir === 'right');
+    chev(0, -Rnotch, stickY < -0.35);
+    chev(0, Rnotch, stickY > 0.35);
+    chev(-Rnotch, 0, stickX < -0.35);
+    chev(Rnotch, 0, stickX > 0.35);
     const icon = predict();
     const showSwing = icon === 'swing' || (icon === 'locked' && barrel === 'intact' && atWall() && !swingPhase);
     const press = pressed ? 3 : 0;
@@ -1863,6 +2057,11 @@
       ctx.stroke();
     }
     if (barrelBtn.show) {
+      // a pulsing ring says "put the spare barrel on now" while Kiro hangs without one
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+      ctx.strokeStyle = 'rgba(255,216,74,' + (0.25 + 0.5 * pulse) + ')';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(barrelBtn.x, barrelBtn.y, barrelBtn.d / 2 + 6 + pulse * 6, 0, TAU); ctx.stroke();
       disc(barrelBtn.x, barrelBtn.y, barrelBtn.d / 2, '#6A3A1C', '#FFD84A');
       if (art && art.barrelIcon) ctx.drawImage(art.barrelIcon, barrelBtn.x - 14, barrelBtn.y - 16, 28, 32);
     }
@@ -2300,10 +2499,8 @@
     label('Weiter', W / 2, visH * 0.42 + L(22), L(16), '#FFF8C4', 'center');
     pill(W / 2 - L(90), visH * 0.52, L(180), L(44), '#10182C', '#FFD84A');
     label(KWAudio.muted ? 'Ton an' : 'Ton aus', W / 2, visH * 0.52 + L(22), L(16), '#FFF8C4', 'center');
-    pill(W / 2 - L(90), visH * 0.62, L(180), L(44), '#10182C', '#FFD84A');
-    label('Sag ' + sagMode, W / 2, visH * 0.62 + L(22), L(16), '#FFF8C4', 'center');
-    pill(W / 2 - L(110), visH * 0.72, L(220), L(44), '#10182C', '#FFD84A');
-    label('Steuerung: ' + (handed === 'left' ? 'Linkshänder' : 'Rechtshänder'), W / 2, visH * 0.72 + L(22), L(14), '#FFF8C4', 'center');
+    pill(W / 2 - L(110), visH * 0.62, L(220), L(44), '#10182C', '#FFD84A');
+    label('Steuerung: ' + (handed === 'left' ? 'Linkshänder' : 'Rechtshänder'), W / 2, visH * 0.62 + L(22), L(14), '#FFF8C4', 'center');
     ctx.restore();
   }
   function render(alpha) {
