@@ -882,12 +882,14 @@
         if (e.state === 'grow') { e.ext = e.reach * ease(clamp(e.t / 500, 0, 1)); if (e.t >= 500) e.state = 'out'; }
         if (e.ext > 16 && overlap(bodyBox(), hazardBox(e))) hurt(e);
       } else if (e.kind === 'cutter') {
+        // the rope runs from its top anchor (ropeAx, 8) down to Kiro; the cutter climbs down along it
+        const ropeXAt = yy => lerp(ropeAx, px, clamp((yy - 8) / Math.max(1, py - 8), 0, 1));
         if (e.state === 'descend') {
-          e.y += dt * 0.12; e.x = ropeAx + e.side * 28;
+          e.y += dt * 0.12; e.x = ropeXAt(e.y) + e.side * 28;
           if (Math.abs(e.y - (py - 10)) < 16) { e.state = 'perch'; e.t = 0; }
         } else {
           // once it sits on the rope it rides along with Kiro, so it stays where the player is looking
-          e.x = ropeAx + e.side * 28; e.y = py - 10;
+          e.y = py - 10; e.x = ropeXAt(e.y) + e.side * 28;
           if (e.state === 'perch' && e.t > 200) { e.state = 'cut'; e.t = 0; KWAudio.loop('rope_cutting', true); }
           else if (e.state === 'cut' && e.t > CUT_MS) { KWAudio.loop('rope_cutting', false); hurt({ force: true }); e.alive = false; }
         }
