@@ -104,11 +104,13 @@
   }
   const baked = {};
   let poseBakeKey = '';
-  // Barrel-center offset from the sprite pivot, CSS px, unmirrored art. Tuned so the barrel sits on the hitbox.
-  const BARREL_DX = { 'kiro-barrel-idle': -1.8, 'kiro-barrel-slash': -8.6, 'kiro-barrel-duck': -5.2, 'kiro-barrel-swing': 18.3 };
+  // Barrel-center offset from the sprite pivot, CSS px, unmirrored art. Measured on the game-6x poses
+  // so the barrel sits on the hitbox.
+  const BARREL_DX = { 'kiro-barrel-idle': -1.8, 'kiro-barrel-slash': -9.0, 'kiro-barrel-duck': -7.1, 'kiro-barrel-swing': -2.2 };
   const NUDGE_Y = { 'kiro-barrel-slash': 2.2, 'kiro-barrel-duck': 6.2, 'kiro-barrel-swing': -0.5 };
   let poseCur = 'kiro-barrel-idle', poseOld = '', poseMix = 1;
   const PIVOT_DY = 48.5;
+  const CUT_MS = 1000;   // how long the rope cutter saws before the rope snaps (was 700)
   const hit = { x: 0, y: 0, w: 58, h: 48 };
   const pick = { x: 0, y: 0, w: 128, h: 150 };
   function pickupBox() {
@@ -220,7 +222,7 @@
   let coinChainAt = 0, nextCoinM = 0, creakSide = 0, ropeCd = 0, hitStop = 0, breakFlash = 0;
   let bits = [];
   let uiNoch = null, uiTitel = null;
-  let shake = 0, pauseAt = 0, titleAt = 0, biomeShown = 'moon', biomeBlend = 1, breakPop = 0;
+  let shake = 0, pauseAt = 0, titleAt = 0, biomeShown = 'moon', biomeBlend = 1, breakPop = 0, breakMsg = 0;
   const POOL = 120;
   const pool = [];
   for (let i = 0; i < POOL; i++) pool.push({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, r: 3, col: '#fff', grav: 0, px0: 0, py0: 0 });
@@ -548,7 +550,7 @@
   }
   function resetRun() {
     px = W / 2; py = Math.min(360, visH * 0.46); moveK = 0; holdMs = 0; coast = null; stickX = 0; stickY = 0; stickDir = null; axisLock = null;
-    barrel = 'intact'; spares = C.spareStart; invuln = 0; equipT = 0; duckT = 0; visSag = 0;
+    barrel = 'intact'; spares = C.spareStart; invuln = 0; equipT = 0; duckT = 0; visSag = 0; breakMsg = 0;
     slashPhase = null; slashT = 0; slashCd = 0; slashSerial++; bufUntil = 0;
     swingPhase = null; swingT = 0; swingU = 0; swingCd = 0; swingKills = 0; ghostN = 0;
     depthPx = 0; playMs = 0; score = 0; runCoins = 0; combo = 1; comboAt = -1e9;
@@ -718,6 +720,7 @@
       barrel = 'broken'; invuln = C.breakInvuln;
       breakFlash = 70;
       breakPop = 1;
+      breakMsg = 1300;
       bits = [];
       for (let i = 0; i < 10; i++) bits.push({ x: px, y: py + 30, vx: Math.cos(i) * (80 + i * 12), vy: -40 - i * 18, a: i, wood: true, life: 900 });
       bits.push({ x: px - 8, y: py + 24, vx: -90, vy: -80, a: 0, ring: true, life: 900 });
@@ -762,7 +765,8 @@
     });
   }
   function spawnBat(screenY) {
-    const side = rng() < 0.5 ? -1 : 1;
+    // come in from the far side, so the bat is on screen for a while before it can reach Kiro
+    const side = Math.abs(px - W / 2) > 40 ? (px < W / 2 ? 1 : -1) : (rng() < 0.5 ? -1 : 1);
     ents.push({
       kind: 'bat', side: side, x: side < 0 ? -20 : W + 20, y: screenY, worldY: depthPx + screenY,
       state: 'aim', t: 0, hp: 1, alive: true, points: 20, vx: 0, vy: 0, hitT: 0, slashId: -1, mode: 'cross'
@@ -777,9 +781,10 @@
     });
   }
   function spawnCutter() {
+    const side = rng() < 0.5 ? -1 : 1;
     ents.push({
-      kind: 'cutter', x: px + (rng() < 0.5 ? -28 : 28), y: 80, worldY: depthPx + 40,
-      state: 'descend', t: 0, hp: 1, alive: true, points: 50, hitT: 0, slashId: -1, side: 1
+      kind: 'cutter', x: px + side * 28, y: 80, worldY: depthPx + 40,
+      state: 'descend', t: 0, hp: 1, alive: true, points: 50, hitT: 0, slashId: -1, side: side
     });
   }
   function aliveAttacks() {
@@ -861,8 +866,12 @@
         if ((e.state === 'lunge' || e.state === 'hold') && !e.harmless && overlap(bodyBox(), hazardBox(e))) hurt(e);
       } else if (e.kind === 'bat') {
         if (e.state === 'aim') {
+          // fly in to a hover point inside the shaft, then aim; the dive only starts once it has been visible
+          const hoverX = e.side < 0 ? C.wall + 50 : W - C.wall - 50;
+          const startX = e.side < 0 ? -20 : W + 20;
+          e.x = lerp(startX, hoverX, ease(clamp(e.t / 300, 0, 1)));
           e.y += (py - 20 - e.y) * Math.min(1, dt / 400);
-          if (e.t > Math.max(450, 600 - depthM() * 0.5)) { e.state = 'dive'; e.t = 0; const a = Math.atan2((py + 30) - e.y, px - e.x); e.vx = Math.cos(a) * 220; e.vy = Math.sin(a) * 220; KWAudio.play('swipe'); }
+          if (e.t > Math.max(700, 850 - depthM() * 0.5)) { e.state = 'dive'; e.t = 0; const a = Math.atan2((py + 30) - e.y, px - e.x); e.vx = Math.cos(a) * 220; e.vy = Math.sin(a) * 220; KWAudio.play('swipe'); }
         } else if (e.state === 'dive') {
           e.x += e.vx * dt / 1000; e.y += e.vy * dt / 1000;
           if (Math.hypot(e.x - px, e.y - (py + 30)) < 28) hurt(e);
@@ -874,11 +883,13 @@
         if (e.ext > 16 && overlap(bodyBox(), hazardBox(e))) hurt(e);
       } else if (e.kind === 'cutter') {
         if (e.state === 'descend') {
-          e.y += dt * 0.12; e.x = ropeAx + (e.x < px ? -28 : 28);
+          e.y += dt * 0.12; e.x = ropeAx + e.side * 28;
           if (Math.abs(e.y - (py - 10)) < 16) { e.state = 'perch'; e.t = 0; }
-        } else if (e.state === 'perch' && e.t > 200) { e.state = 'cut'; e.t = 0; KWAudio.loop('rope_cutting', true); }
-        else if (e.state === 'cut') {
-          if (e.t > 700) { KWAudio.loop('rope_cutting', false); hurt({ force: true }); e.alive = false; }
+        } else {
+          // once it sits on the rope it rides along with Kiro, so it stays where the player is looking
+          e.x = ropeAx + e.side * 28; e.y = py - 10;
+          if (e.state === 'perch' && e.t > 200) { e.state = 'cut'; e.t = 0; KWAudio.loop('rope_cutting', true); }
+          else if (e.state === 'cut' && e.t > CUT_MS) { KWAudio.loop('rope_cutting', false); hurt({ force: true }); e.alive = false; }
         }
         if (Math.hypot(e.x - px, e.y - (py - 0.18 * BH)) < C.swordR) { /* vulnerable: swordHits handles it */ }
       }
@@ -1128,6 +1139,7 @@
     KWAudio.setMusic(tier);
     tryAction();
     breakFlash = Math.max(0, breakFlash - dt);
+    breakMsg = Math.max(0, breakMsg - dt);
     if (breakPop > 0) breakPop = Math.max(0, breakPop - dt / 180);
     if (hudCoinT > 0) hudCoinT = Math.max(0, hudCoinT - dt / 160);
     if (hudSpareT > 0) hudSpareT = Math.max(0, hudSpareT - dt / 160);
@@ -1368,7 +1380,8 @@
       }
     }
     const beam0 = Math.floor(depth / 1600) * 1600;
-    for (let b = beam0; b < depth + visH; b += 1600) {
+    // the flat 100 m beam reads like an obstacle on the painted walls, so it is only drawn without them
+    for (let b = beam0; !painted && b < depth + visH; b += 1600) {
       if (b <= 0) continue;
       const sy = b - depth;
       if (sy > -16 && sy < visH) {
@@ -1509,7 +1522,7 @@
       ctx.drawImage(art.shadow, x - 8 + lean * 2.2, y + 26, 84, 30);
       ctx.globalAlpha = 1;
     }
-    if (art && art.rim) {
+    if (art && art.rim && !baked['kiro-barrel-idle']) {
       ctx.globalAlpha = 0.8;
       ctx.drawImage(art.rim, x - 42, y - 76, 84, 40);
       ctx.globalAlpha = 1;
@@ -1618,17 +1631,19 @@
     bakeFoes();
     const ext = lerpA(e.pext || 0, e.ext || 0, alpha);
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
-    const side = e.side < 0 ? -1 : 1;
-    const inner = side < 0 ? C.wall : W - C.wall;
-    const reach = 58 + ext;
-    const headX = inner + side * reach;
+    // dir points from the wall into the shaft, the same way the hit box (hazardBox) reaches
+    const dir = e.side < 0 ? 1 : -1;
+    const inner = e.side < 0 ? C.wall : W - C.wall;
     const wind = e.state === 'windup' ? Math.sin(clamp(e.t / 320, 0, 1) * Math.PI) * 14 : 0;
-    const segs = 6;
+    const headX = inner + dir * (30 + ext - wind * 0.6);
+    const baseX = inner - dir * 6;
+    const len = Math.abs(headX - baseX);
+    const segs = 4 + Math.round(len / 24);
     for (let i = 0; i <= segs; i++) {
       const t = i / segs;
-      const x = lerpA(inner + side * 8, headX, t);
+      const x = lerpA(baseX, headX, t);
       const yy = y + Math.sin(t * Math.PI) * (-6 - wind * 0.4);
-      const rad = 8 + t * 9;
+      const rad = 9 + t * 8;
       const spr = i % 2 ? foe.a : foe.b;
       ctx.drawImage(spr, x - rad, yy - rad, rad * 2, rad * 2);
     }
@@ -1636,8 +1651,7 @@
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     for (let i = 1; i < segs; i++) {
-      const t = i / segs;
-      const x = lerpA(inner + side * 8, headX, t);
+      const x = lerpA(baseX, headX, i / segs);
       ctx.beginPath();
       ctx.moveTo(x, y + 8);
       ctx.lineTo(x - 7, y + 18);
@@ -1646,16 +1660,19 @@
       ctx.stroke();
     }
     ctx.fillStyle = '#FFE7B0';
-    ctx.beginPath(); ctx.arc(headX + side * 6, y - 12 - wind * 0.2, 5, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(headX + dir * 6, y - 12 - wind * 0.2, 5, 0, TAU); ctx.fill();
     ctx.fillStyle = e.state === 'windup' ? '#FF5A2A' : '#E23B16';
-    ctx.beginPath(); ctx.arc(headX + side * 7, y - 12 - wind * 0.2, 2.4, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(headX + dir * 7, y - 12 - wind * 0.2, 2.4, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#1B2028';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(headX + dir * 14, y - 2);
+    ctx.lineTo(headX + dir * 26, y - 10);
+    ctx.moveTo(headX + dir * 14, y + 6);
+    ctx.lineTo(headX + dir * 26, y + 8);
+    ctx.stroke();
     ctx.strokeStyle = '#E6EDF5';
     ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(headX + side * 14, y - 2);
-    ctx.lineTo(headX + side * 26, y - 10);
-    ctx.moveTo(headX + side * 14, y + 6);
-    ctx.lineTo(headX + side * 26, y + 8);
     ctx.stroke();
     if (e.state === 'windup') {
       ctx.globalAlpha = 0.35 + 0.25 * Math.sin(performance.now() / 80);
@@ -1668,43 +1685,64 @@
     const x = lerpA(e.px0 == null ? e.x : e.px0, e.x, alpha);
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
     const flap = Math.sin(performance.now() / 70 + x * 0.02);
+    if (e.alive && e.state === 'aim' && e.t > 250 && art && art.glowWarm) {
+      ctx.globalAlpha = 0.3 + 0.25 * Math.sin(performance.now() / 70);
+      ctx.drawImage(art.glowWarm, x - 40, y - 34, 80, 80);
+      ctx.globalAlpha = 1;
+    }
     ctx.drawImage(foe.bat, x - 52, y - 28 + flap * 3, 104, 62);
   }
   function drawHazard(e, alpha) {
     const ext = lerpA(e.pext || 0, e.ext || 0, alpha);
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
-    const side = e.side < 0 ? -1 : 1;
-    const inner = side < 0 ? C.wall : W - C.wall;
+    const dir = e.side < 0 ? 1 : -1;
+    const inner = e.side < 0 ? C.wall : W - C.wall;
     const len = Math.max(18, ext);
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     if (e.vine) {
-      ctx.strokeStyle = '#2F6A48';
-      ctx.lineWidth = 10;
       ctx.beginPath();
-      ctx.moveTo(inner, y);
-      ctx.quadraticCurveTo(inner + side * len * 0.5, y - 16, inner + side * len, y + 2);
+      ctx.moveTo(inner - dir * 4, y);
+      ctx.quadraticCurveTo(inner + dir * len * 0.5, y - 16, inner + dir * len, y + 2);
+      ctx.strokeStyle = '#10261A';
+      ctx.lineWidth = 14;
       ctx.stroke();
-      ctx.strokeStyle = '#8FBF7A';
+      ctx.strokeStyle = '#3E8A56';
+      ctx.lineWidth = 9;
+      ctx.stroke();
+      ctx.strokeStyle = '#A6DA8E';
       ctx.lineWidth = 3;
       ctx.stroke();
-      ctx.fillStyle = '#DDE8D4';
       for (let i = 1; i <= 4; i++) {
-        const x = inner + side * (len * i / 4);
+        const x = inner + dir * (len * i / 4);
         ctx.beginPath();
         ctx.moveTo(x, y - 2);
-        ctx.lineTo(x + side * 8, y - 12);
-        ctx.lineTo(x + side * 4, y);
+        ctx.lineTo(x + dir * 8, y - 13);
+        ctx.lineTo(x + dir * 4, y);
+        ctx.closePath();
+        ctx.fillStyle = '#F2F6EC';
         ctx.fill();
+        ctx.strokeStyle = '#10261A';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       }
     } else {
-      ctx.fillStyle = '#8A93A2';
-      for (let i = 0; i < 4; i++) {
-        const x = inner + side * (10 + i * len / 4);
+      ctx.fillStyle = '#2A2F3A';
+      traceRound(Math.min(inner - dir * 4, inner + dir * (len + 4)), y + 6, len + 8, 8, 3);
+      ctx.fill();
+      const n = Math.max(3, Math.round(len / 18));
+      for (let i = 0; i < n; i++) {
+        const x = inner + dir * (4 + i * (len - 20) / (n - 1));
         ctx.beginPath();
         ctx.moveTo(x, y + 10);
-        ctx.lineTo(x + side * 6, y - 16 - (i % 2) * 6);
-        ctx.lineTo(x + side * 16, y + 10);
+        ctx.lineTo(x + dir * 7, y - 18 - (i % 2) * 6);
+        ctx.lineTo(x + dir * 16, y + 10);
+        ctx.closePath();
+        ctx.fillStyle = '#D9E0EA';
         ctx.fill();
+        ctx.strokeStyle = '#1A1F28';
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
     }
   }
@@ -1713,20 +1751,40 @@
     const y = lerpA(e.py0 == null ? e.y : e.py0, e.y, alpha);
     ctx.save();
     ctx.translate(x, y);
-    ctx.fillStyle = '#3E7A3A';
+    if (e.alive && (e.state === 'perch' || e.state === 'cut')) {
+      const u = e.state === 'cut' ? clamp(e.t / CUT_MS, 0, 1) : 0;
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
+      ctx.strokeStyle = 'rgba(255,70,60,' + (0.35 + 0.35 * pulse) + ')';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, 27, 0, TAU); ctx.stroke();
+      if (u > 0) {
+        ctx.strokeStyle = '#FF4A3D';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(0, 0, 27, -Math.PI / 2, -Math.PI / 2 + TAU * u); ctx.stroke();
+      }
+    }
+    const k = 1.35;
+    ctx.scale(e.side < 0 ? -k : k, k);
+    ctx.fillStyle = '#132313';
+    ctx.beginPath(); ctx.ellipse(0, 0, 18, 14, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#4C9A45';
     ctx.beginPath(); ctx.ellipse(0, 0, 16, 12, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#8FCB78';
+    ctx.fillStyle = '#A6E08E';
     ctx.beginPath(); ctx.ellipse(-4, -4, 6, 3, -0.4, 0, TAU); ctx.fill();
-    ctx.strokeStyle = '#E6EDF2';
-    ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
-    const open = e.state === 'cut' ? 0.5 : 0.2;
+    const open = e.state === 'cut' ? 0.25 + 0.25 * Math.sin(performance.now() / 45) : 0.2;
     ctx.beginPath();
     ctx.moveTo(-6, 2); ctx.lineTo(-18, 2 - open * 16);
     ctx.moveTo(-6, 6); ctx.lineTo(-18, 6 + open * 16);
+    ctx.strokeStyle = '#132313';
+    ctx.lineWidth = 5;
     ctx.stroke();
-    ctx.fillStyle = '#F4F1C8';
-    ctx.beginPath(); ctx.arc(6, -2, 2.2, 0, TAU); ctx.arc(6, 4, 2.2, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#F2F6F8';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = '#FFF3B0';
+    ctx.beginPath(); ctx.arc(6, -2, 2.4, 0, TAU); ctx.arc(6, 4, 2.4, 0, TAU); ctx.fill();
     ctx.restore();
   }
   function drawEnt(e, alpha) {
@@ -1805,7 +1863,7 @@
       const sy = pickup.worldY - depth;
       ctx.drawImage(art.barrelIcon, pickup.x - 16, sy - 20, 32, 36);
     }
-    for (const e of ents) drawEnt(e, alpha);
+    for (const e of ents) if (e.kind !== 'cutter') drawEnt(e, alpha);
     if (swingPhase === 'fly' && ghostN && baked['kiro-barrel-swing']) {
       for (let i = 0; i < ghostN; i++) {
         const g = ghost[i];
@@ -1828,7 +1886,50 @@
     drawBits(alpha);
     drawPlayer(alpha);
     drawSword(alpha);
+    // the rope cutter sits at head height on the rope, so it is drawn in front of Kiro
+    for (const e of ents) if (e.kind === 'cutter') drawEnt(e, alpha);
     drawParts(alpha);
+    drawDanger(alpha);
+  }
+  // Without the barrel the next hit ends the run: a slow red edge pulse says so, and the break itself is named.
+  function drawDanger(alpha) {
+    if (barrel !== 'broken' || (state !== 'play' && state !== 'pause')) return;
+    // four edge strips instead of a full-screen gradient: same look, a fraction of the pixels
+    const E = 56;
+    if (drawDanger.h !== visH) {
+      const mk = (x0, y0, x1, y1) => { const g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, 'rgba(255,40,40,0.55)'); g.addColorStop(1, 'rgba(255,40,40,0)'); return g; };
+      drawDanger.g = [mk(0, 0, 0, E), mk(0, visH, 0, visH - E), mk(0, 0, E, 0), mk(W, 0, W - E, 0)];
+      drawDanger.h = visH;
+    }
+    const g = drawDanger.g;
+    ctx.globalAlpha = 0.4 + 0.25 * Math.sin(performance.now() / 260);
+    ctx.fillStyle = g[0]; ctx.fillRect(0, 0, W, E);
+    ctx.fillStyle = g[1]; ctx.fillRect(0, visH - E, W, E);
+    ctx.fillStyle = g[2]; ctx.fillRect(0, E, E, visH - 2 * E);
+    ctx.fillStyle = g[3]; ctx.fillRect(W - E, E, E, visH - 2 * E);
+    ctx.globalAlpha = 1;
+    if (breakMsg > 0) {
+      const x = clamp(lerpA(prev.px, px, alpha), 112, W - 112), y = lerpA(prev.py, py, alpha) - 34 - (1300 - breakMsg) * 0.02;
+      ctx.globalAlpha = clamp(breakMsg / 400, 0, 1);
+      font(22);
+      ctx.textAlign = 'center';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#1A0E10';
+      ctx.strokeText('Fass kaputt!', x, y);
+      ctx.fillStyle = '#FFD7C2';
+      ctx.fillText('Fass kaputt!', x, y);
+      if (spares > 0) {
+        font(15);
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 5;
+        ctx.strokeText('Ersatzfass-Knopf drücken', x, y + 22);
+        ctx.fillStyle = '#FFE68A';
+        ctx.fillText('Ersatzfass-Knopf drücken', x, y + 22);
+      }
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
+    }
   }
   function speaker(x, y, muted) {
     ctx.strokeStyle = muted ? '#8B93A6' : '#F4F1EA';
@@ -1954,6 +2055,11 @@
       ctx.stroke();
     }
     if (barrelBtn.show) {
+      // a pulsing ring says "put the spare barrel on now" while Kiro hangs without one
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+      ctx.strokeStyle = 'rgba(255,216,74,' + (0.25 + 0.5 * pulse) + ')';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(barrelBtn.x, barrelBtn.y, barrelBtn.d / 2 + 6 + pulse * 6, 0, TAU); ctx.stroke();
       disc(barrelBtn.x, barrelBtn.y, barrelBtn.d / 2, '#6A3A1C', '#FFD84A');
       if (art && art.barrelIcon) ctx.drawImage(art.barrelIcon, barrelBtn.x - 14, barrelBtn.y - 16, 28, 32);
     }
