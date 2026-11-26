@@ -109,6 +109,9 @@
   const BARREL_DX = { 'kiro-barrel-idle': -1.8, 'kiro-barrel-slash': -9.0, 'kiro-barrel-duck': -7.1, 'kiro-barrel-swing': -2.2 };
   const NUDGE_Y = { 'kiro-barrel-slash': 2.2, 'kiro-barrel-duck': 6.2, 'kiro-barrel-swing': -0.5 };
   let poseCur = 'kiro-barrel-idle', poseOld = '', poseMix = 1;
+  // Procedural body motion on top of the still poses: lean, squash and stretch, breathing.
+  // Springs run in the fixed step; drawPlayer interpolates prev -> current.
+  const body = { rot: 0, rotV: 0, sq: 0, sqV: 0, prevRot: 0, prevSq: 0, lastX: NaN, vx: 0, lastSwing: null };
   const PIVOT_DY = 48.5;
   const CUT_MS = 1000;   // how long the rope cutter saws before the rope snaps (was 700)
   const hit = { x: 0, y: 0, w: 58, h: 48 };
@@ -559,6 +562,7 @@
     lastPickupM = 0; pickupRoll = -1; pickup = null; coinChainAt = 0; nextCoinM = 0;
     ents = []; coins = []; parts = []; recoil = 0; impact = 0; hitStop = 0;
     ropeAx = px; initRope();
+    body.rot = body.rotV = body.sq = body.sqV = body.prevRot = body.prevSq = body.vx = 0; body.lastX = NaN; body.lastSwing = null;
     for (let i = 0; i < POOL; i++) pool[i].alive = false;
     shake = 0;
     snapshot();
@@ -986,6 +990,29 @@
     coins.length = cw;
   }
 
+  function updateBody(dt) {
+    body.prevRot = body.rot; body.prevSq = body.sq;
+    const s = Math.min(0.034, dt / 1000);
+    if (!(body.lastX === body.lastX)) body.lastX = px;
+    const vx = (px - body.lastX) / Math.max(0.001, s);
+    body.lastX = px;
+    body.vx += (clamp(vx, -900, 900) - body.vx) * Math.min(1, dt / 70);
+    // hanging body: it trails the rope end and leans a little along the rope
+    const ropeAng = Math.atan2(px - ropeAx, Math.max(40, py - 8));
+    let tRot = clamp(body.vx * 0.00055, -0.2, 0.2) - clamp(ropeAng * 0.25, -0.1, 0.1);
+    let tSq = 0;
+    if (slashPhase === 'windup') { tRot -= slashDir * 0.08; tSq = 0.07; }
+    else if (slashPhase === 'active') { tRot += slashDir * 0.16; tSq = -0.06; }
+    else if (slashPhase === 'recover') tRot += slashDir * 0.06;
+    if (swingPhase === 'windup') tSq = 0.08;
+    else if (swingPhase === 'fly') tSq = -0.05;
+    if (body.lastSwing && !swingPhase) body.sqV += 1.6;
+    body.lastSwing = swingPhase;
+    body.rotV += ((tRot - body.rot) * 170 - body.rotV * 17) * s;
+    body.rot = clamp(body.rot + body.rotV * s, -0.32, 0.32);
+    body.sqV += ((tSq - body.sq) * 320 - body.sqV * 15) * s;
+    body.sq = clamp(body.sq + body.sqV * s, -0.13, 0.13);
+  }
   function barrelSway() {
     if ((state !== 'play' && state !== 'portal') || swingPhase) return 0;
     const t = playMs / 1000;
@@ -1092,6 +1119,7 @@
           swingOmega = -swingOmega * SWING_RESTITUTION;
           swingPhase = 'bounce';
           impact = 1;
+          body.sqV += 3.4;
           KWAudio.play('barrel_land');
           shake = Math.max(shake, 3.5);
           burst(px, py + BH / 2, 8, '#E0A868', 90, 360, 280);
@@ -1146,8 +1174,9 @@
     if (hudCoinT > 0) hudCoinT = Math.max(0, hudCoinT - dt / 160);
     if (hudSpareT > 0) hudSpareT = Math.max(0, hudSpareT - dt / 160);
     const nextPose = poseName();
-    if (nextPose !== poseCur) { poseOld = poseCur; poseCur = nextPose; poseMix = 0; }
-    if (poseMix < 1) poseMix = Math.min(1, poseMix + dt / 70);
+    if (nextPose !== poseCur) { poseOld = poseCur; poseCur = nextPose; poseMix = 0; body.sqV += nextPose === 'kiro-barrel-slash' ? 0 : 1.1; }
+    if (poseMix < 1) poseMix = Math.min(1, poseMix + dt / 90);
+    updateBody(dt);
     let bi = 0;
     for (let i = 0; i < bits.length; i++) {
       const b = bits[i];
@@ -1529,16 +1558,28 @@
       ctx.drawImage(art.rim, x - 42, y - 76, 84, 40);
       ctx.globalAlpha = 1;
     }
-    const sq = barrel === 'intact' ? duckT / C.duckMs : 0;
-    if (pop !== 1 || sq > 0.02) {
+    const duck = barrel === 'intact' ? duckT / C.duckMs : 0;
+    const live = state === 'play' || state === 'portal';
+    const rot = live ? lerpA(body.prevRot, body.rot, alpha) : 0;
+    const breathe = live && !slashPhase && !swingPhase ? Math.sin(playMs / 1000 * 2.4) * 0.014 : 0;
+    const sq = (live ? lerpA(body.prevSq, body.sq, alpha) : 0) + duck * 0.06 + breathe;
+    if (Math.abs(rot) > 0.002) {
+      const ay = y - PIVOT_DY;
+      ctx.translate(x, ay);
+      ctx.rotate(rot);
+      ctx.translate(-x, -ay);
+    }
+    if (pop !== 1 || Math.abs(sq) > 0.002) {
       ctx.translate(x, y + 20);
-      ctx.scale(pop * (1 + sq * 0.07), pop * (1 - sq * 0.05));
+      ctx.scale(pop * (1 + sq), pop * (1 - sq * 0.85));
       ctx.translate(-x, -(y + 20));
     }
     if (hidden) ctx.globalAlpha *= 0.45;
     const face = faceDir();
-    if (poseOld && poseMix < 1) drawPoseAt(poseOld, x, y, 1 - poseMix, face);
-    drawPoseAt(poseCur, x, y, poseOld && poseMix < 1 ? poseMix : 1, face);
+    // old pose stays opaque for the first half so the blend never turns see-through
+    const mix = poseMix * poseMix * (3 - 2 * poseMix);
+    if (poseOld && poseMix < 1) drawPoseAt(poseOld, x, y, Math.min(1, 2 * (1 - mix)), face);
+    drawPoseAt(poseCur, x, y, poseOld && poseMix < 1 ? mix : 1, face);
     if (breakFlash > 40) {
       ctx.globalAlpha = clamp((breakFlash - 40) / 50, 0, 0.45);
       ctx.fillStyle = '#FFFFFF';
