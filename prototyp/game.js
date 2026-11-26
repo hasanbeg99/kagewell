@@ -49,6 +49,12 @@
     'kiro-barrel-title': { c: [244, 316], p: [122, 218], rope: 5 },
     'kiro-barrel-swing': { c: [312, 296], p: [156, 205], rope: 174 },
     'kiro-barrel-slash': { c: [240, 297], p: [120, 211], rope: 170 },
+    // in-between frames, aligned on the idle / swing barrel so they share those pivots
+    'kiro-slash-a': { c: [240, 296], p: [120, 206], rope: 165 },
+    'kiro-slash-b': { c: [240, 296], p: [120, 206], rope: 165 },
+    'kiro-slash-c': { c: [240, 296], p: [120, 206], rope: 165 },
+    'kiro-swing-crouch': { c: [240, 296], p: [120, 206], rope: 165 },
+    'kiro-swing-fly': { c: [312, 296], p: [156, 205], rope: 174 },
     'kiro-barrel-duck': { c: [240, 291], p: [120, 220], rope: 191 },
     'kiro-hang-nobarrel': { c: [160, 216], p: [80, 91], rope: 91 },
     'kiro-lying-faint': { c: [360, 180], p: [180, 98] },
@@ -107,8 +113,12 @@
   let poseBakeKey = '';
   // Barrel-center offset from the sprite pivot, CSS px, unmirrored art. Measured on the game-6x poses
   // so the barrel sits on the hitbox.
-  const BARREL_DX = { 'kiro-barrel-idle': -1.8, 'kiro-barrel-slash': -9.0, 'kiro-barrel-duck': -7.1, 'kiro-barrel-swing': -2.2 };
-  const NUDGE_Y = { 'kiro-barrel-slash': 2.2, 'kiro-barrel-duck': 6.2, 'kiro-barrel-swing': -0.5 };
+  const BARREL_DX = { 'kiro-barrel-idle': -1.8, 'kiro-barrel-slash': -9.0, 'kiro-barrel-duck': -7.1, 'kiro-barrel-swing': -2.2,
+    'kiro-slash-a': -1.8, 'kiro-slash-b': -1.8, 'kiro-slash-c': -1.8, 'kiro-swing-crouch': -1.8, 'kiro-swing-fly': -2.2 };
+  const NUDGE_Y = { 'kiro-barrel-slash': 2.2, 'kiro-barrel-duck': 6.2, 'kiro-barrel-swing': -0.5, 'kiro-swing-fly': -0.5 };
+  // frames of one action cut hard into each other; only entering and leaving an action blends
+  const POSE_GROUP = { 'kiro-slash-a': 'slash', 'kiro-barrel-slash': 'slash', 'kiro-slash-b': 'slash', 'kiro-slash-c': 'slash',
+    'kiro-swing-crouch': 'swing', 'kiro-swing-fly': 'swing', 'kiro-barrel-swing': 'swing' };
   let poseCur = 'kiro-barrel-idle', poseOld = '', poseMix = 1;
   // Procedural body motion on top of the still poses: lean, squash and stretch, breathing.
   // Springs run in the fixed step; drawPlayer interpolates prev -> current.
@@ -1155,7 +1165,11 @@
   }
   function poseName() {
     if (barrel === 'broken') return 'kiro-hang-nobarrel';
-    if (slashPhase) return 'kiro-barrel-slash';
+    if (slashPhase === 'windup') return 'kiro-slash-a';
+    if (slashPhase === 'active') return slashT < C.swordActive * 0.45 ? 'kiro-barrel-slash' : 'kiro-slash-b';
+    if (slashPhase === 'recover') return 'kiro-slash-c';
+    if (swingPhase === 'windup') return 'kiro-swing-crouch';
+    if (swingPhase === 'fly') return 'kiro-swing-fly';
     if (swingPhase) return 'kiro-barrel-swing';
     if (duckT > C.duckMs * 0.3 && atWall()) return 'kiro-barrel-duck';
     return 'kiro-barrel-idle';
@@ -1320,7 +1334,11 @@
     if (hudCoinT > 0) hudCoinT = Math.max(0, hudCoinT - dt / 160);
     if (hudSpareT > 0) hudSpareT = Math.max(0, hudSpareT - dt / 160);
     const nextPose = poseName();
-    if (nextPose !== poseCur) { poseOld = poseCur; poseCur = nextPose; poseMix = 0; body.sqV += nextPose === 'kiro-barrel-slash' ? 0 : 1.1; }
+    if (nextPose !== poseCur) {
+      const same = POSE_GROUP[nextPose] && POSE_GROUP[nextPose] === POSE_GROUP[poseCur];
+      if (!same) body.sqV += POSE_GROUP[nextPose] === 'slash' ? 0 : 1.1;
+      poseOld = poseCur; poseCur = nextPose; poseMix = same ? 1 : 0;
+    }
     if (poseMix < 1) poseMix = Math.min(1, poseMix + dt / 90);
     updateBody(dt);
     let bi = 0;
@@ -2185,14 +2203,14 @@
       ctx.drawImage(art.barrelIcon, pickup.x - 16, sy - 20, 32, 36);
     }
     for (const e of ents) if (e.kind !== 'cutter') drawEnt(e, alpha);
-    if (swingPhase === 'fly' && ghostN && baked['kiro-barrel-swing']) {
+    if (swingPhase === 'fly' && ghostN && baked['kiro-swing-fly']) {
       for (let i = 0; i < ghostN; i++) {
         const g = ghost[i];
         const fade = 1 - (swingT - g.t) / GHOST_FADE_MS;
         if (fade <= 0) continue;
         ctx.save();
         ctx.globalAlpha = fade * 0.32;
-        drawPoseAt('kiro-barrel-swing', g.x, g.y + PIVOT_DY, 1, g.face || 1);
+        drawPoseAt('kiro-swing-fly', g.x, g.y + PIVOT_DY, 1, g.face || 1);
         ctx.restore();
       }
     }
