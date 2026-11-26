@@ -31,6 +31,7 @@
     spareStart: 1, spareMax: 3, breakInvuln: 1200, breakSpeed: 1.15,
     equipMs: 400, equipInvuln: 1000, pickupGapM: 60, pickupEveryM: 10, pickupChance: 0.25,
     safeMs: 300, impactGapMs: 350, firstCoinAtMs: 1500, firstEnemyAtMs: 2000,
+    hpMax: 6, hurtInvuln: 1000, smashWindowMs: 1600, fightTimeoutMs: 45000,
     faintButtonMs: 300, pointsPerMeter: 10,     coinPoints: 10, noBarrelScoreMult: 1.5, coinDropOnKillChance: 0.45
   };
   const W = 390, BH = C.barrelH, BW = C.barrelW, TAU = Math.PI * 2;
@@ -223,6 +224,10 @@
   let combo = 1, comboAt = -1e9, playerMoved = 0, unfair = false, caused = false, firstCreep = false, knotLock = 0;
   let waveT = 0, waveN = 1, waveOn = true, attackAt = 0, lastImpact = -1e9, lastPickupM = 0, pickupRoll = -1, pickup = null;
   let coinChainAt = 0, nextCoinM = 0, creakSide = 0, ropeCd = 0, hitStop = 0, breakFlash = 0;
+  // Energy instead of the barrel break, fights that hold the descent, smash finisher (Battletoads-style rope level).
+  let hp = 6, hpShowT = 0, cruise = 0, phase = 'travel', fightAtM = 8, encN = 0, enc = null, nextFlyM = 30;
+  let smashChain = 0, smashAt = -1e9, smashReady = false, slashSmash = false, slashLanded = false;
+  let flies = [], bolts = [], pops = [], banner = null;
   let bits = [];
   let uiNoch = null, uiTitel = null;
   let shake = 0, pauseAt = 0, titleAt = 0, biomeShown = 'moon', biomeBlend = 1, breakPop = 0, breakMsg = 0;
@@ -561,6 +566,9 @@
     waveT = 0; waveN = 1; waveOn = true; attackAt = 0; lastImpact = -1e9;
     lastPickupM = 0; pickupRoll = -1; pickup = null; coinChainAt = 0; nextCoinM = 0;
     ents = []; coins = []; parts = []; recoil = 0; impact = 0; hitStop = 0;
+    hp = C.hpMax; hpShowT = 0; cruise = C.scroll0; phase = 'travel'; fightAtM = 8; encN = 0; enc = null; nextFlyM = 30;
+    smashChain = 0; smashAt = -1e9; smashReady = false; slashSmash = false; slashLanded = false;
+    flies = []; bolts = []; pops = []; banner = null;
     ropeAx = px; initRope();
     body.rot = body.rotV = body.sq = body.sqV = body.prevRot = body.prevSq = body.vx = 0; body.lastX = NaN; body.lastSwing = null;
     for (let i = 0; i < POOL; i++) pool[i].alive = false;
@@ -622,6 +630,8 @@
   function startSlash() {
     slashPhase = 'windup'; slashT = 0; slashCd = C.swordCd; slashSerial++;
     slashDir = slashSide(); lastSide = slashDir;
+    slashSmash = smashReady; smashReady = false; slashLanded = false;
+    if (slashSmash) { body.sqV -= 3.2; shake = Math.max(shake, 2); }
     KWAudio.play('sword_slash');
   }
   function ropeAttachDy() {
@@ -679,7 +689,13 @@
   function swordHits() {
     const sweep = slashPhase === 'recover' ? 1 : ease(clamp(slashT / C.swordSweepMs, 0, 1));
     const pivotY = py + BH / 2 - 34;
-    const rad = 76;
+    const rad = slashSmash ? 112 : 76;
+    // fireflies and bolts inside the blade's reach are caught / knocked out of the air
+    for (let i = 0; i < flies.length; i++) { const f = flies[i]; if (!f.got && Math.hypot(f.x - px, f.y - pivotY) < rad + 10) eatFly(f); }
+    for (let i = 0; i < bolts.length; i++) {
+      const b = bolts[i];
+      if (!b.dead && Math.hypot(b.x - px, b.y - pivotY) < rad + 8) { b.dead = true; slashLanded = true; score += 5; burst(b.x, b.y, 8, '#FFB45A', 120, 300, 0); KWAudio.play('enemy_hit'); }
+    }
     const extra = Math.atan2(0.28 * BH, rad);
     const start = -Math.PI / 2;
     const end = slashDir > 0 ? start + (Math.PI / 2) * sweep : start - (Math.PI / 2) * sweep;
@@ -693,14 +709,20 @@
       const hi = Math.max(start, end) + (sweep > 0.92 && slashDir > 0 ? extra : 0);
       if (a < lo - 0.06 || a > hi + 0.06) continue;
       en.slashId = slashSerial;
-      kill(en, slashDir, false);
+      slashLanded = true;
+      kill(en, slashDir, false, slashSmash ? 3 : 1);
+      if (slashSmash) {
+        hitStop = Math.max(hitStop, 110); shake = Math.max(shake, 7);
+        burst(en.x, en.y, 18, '#FFE36A', 220, 520, 160);
+        popText('SMASH!', en.x, en.y - 20, '#FFE36A', 30);
+      }
     }
   }
-  function kill(en, dir, fromSwing) {
-    if (!en.alive || en.hp <= 0 || en.kind === 'hazard') return;
-    en.hp--; en.hitT = 90;
-    if (en.hp > 0) { KWAudio.play('enemy_hit'); return; }
-    en.alive = false; en.t = 0; en.vx = (dir || 1) * 80; en.vy = -40;
+  function kill(en, dir, fromSwing, dmg) {
+    if (!en.alive || en.hp <= 0 || en.kind === 'hazard' || en.kind === 'zapper') return;
+    en.hp -= dmg || 1; en.hitT = 90;
+    if (en.hp > 0) { KWAudio.play('enemy_hit'); hitStop = Math.max(hitStop, 30); return; }
+    en.alive = false; en.t = 0; en.vx = (dir || 1) * (dmg >= 3 ? 420 : 80); en.vy = dmg >= 3 ? -180 : -40; en.smashed = dmg >= 3;
     const now = playMs;
     if (now - comboAt <= 2000) combo = Math.min(2, combo + 0.25); else combo = 1;
     comboAt = now;
@@ -717,26 +739,19 @@
     if (en.kind === 'cutter') knotLock = playMs + 1000;
   }
   function hurt(src) {
-    if (invuln > 0 || swingPhase || barrel === 'equipping' || state !== 'play') return;
+    if (invuln > 0 || swingPhase || state !== 'play') return;
     if (playMs < 20000 && !caused && !(src && src.force)) return;
     if (src && src.harmless) return;
-    if (barrel === 'intact' && !(src && src.force)) {
-      barrel = 'broken'; invuln = C.breakInvuln;
-      breakFlash = 70;
-      breakPop = 1;
-      breakMsg = 1300;
-      bits = [];
-      for (let i = 0; i < 10; i++) bits.push({ x: px, y: py + 30, vx: Math.cos(i) * (80 + i * 12), vy: -40 - i * 18, a: i, wood: true, life: 900 });
-      bits.push({ x: px - 8, y: py + 24, vx: -90, vy: -80, a: 0, ring: true, life: 900 });
-      bits.push({ x: px + 8, y: py + 24, vx: 90, vy: -60, a: 1, ring: true, life: 900 });
-      burst(px, py + BH / 2, 14, '#E0A868', 150, 680, 480);
-      burst(px, py + 8, 5, '#F4F1EA', 50, 240, 20);
-      shake = Math.max(shake, 4);
-      KWAudio.play('barrel_break');
-      combo = 1;
-      return;
-    }
-    faint(src && src.force ? 'rope' : 'hit');
+    if (src && src.force) { hp = 0; hpShowT = 1; faint('rope'); return; }
+    hp = Math.max(0, hp - ((src && src.dmg) || 1));
+    hpShowT = 1; invuln = C.hurtInvuln; breakFlash = 70; breakPop = 0.6;
+    smashChain = 0; smashReady = false; combo = 1;
+    if (src && Number.isFinite(src.x) && src.kind !== 'zapper') px = clamp(px + (px < src.x ? -18 : 18), minX(), maxX());
+    burst(px, py + 50, 10, '#FF7A66', 130, 420, 200);
+    shake = Math.max(shake, 4.5);
+    if (hp <= 0) { faint('hit'); return; }
+    KWAudio.play('player_hit');
+    if (hp <= 2) breakMsg = 1300;
   }
   let faintT = -1, faintKind = 'hit', faintShown = false, highPlayed = false;
   function faintAge() { return faintT; }
@@ -879,8 +894,30 @@
         } else if (e.state === 'dive') {
           e.x += e.vx * dt / 1000; e.y += e.vy * dt / 1000;
           if (Math.hypot(e.x - px, e.y - (py + 30)) < 28) hurt(e);
-          if (e.x < -40 || e.x > W + 40 || e.y < -40 || e.y > visH + 40) e.alive = false;
+          if (e.x < -40 || e.x > W + 40 || e.y < -40 || e.y > visH + 40) {
+            // in a fight a bat that misses circles back for another pass
+            e.tries = (e.tries || 0) + 1;
+            if (phase === 'fight' && e.tries < 4) { e.state = 'aim'; e.t = 0; e.side = e.x < W / 2 ? -1 : 1; e.y = clamp(py - 110, 80, visH * 0.5); }
+            else e.alive = false;
+          }
         }
+      } else if (e.kind === 'blaster') {
+        const inner = e.side < 0 ? C.wall : W - C.wall, dir = e.side < 0 ? 1 : -1;
+        const out = e.state === 'emerge' ? ease(clamp(e.t / 350, 0, 1)) : 1;
+        e.x = inner + dir * 24 * out;
+        const want = Math.atan2((py + 58) - e.y, px - e.x);
+        let da = want - e.aimA; while (da > Math.PI) da -= TAU; while (da < -Math.PI) da += TAU;
+        if (e.state !== 'cool') e.aimA += da * Math.min(1, dt / 120);
+        if (e.state === 'emerge' && e.t >= 350) { e.state = 'aim'; e.t = 0; }
+        else if (e.state === 'aim' && e.t >= Math.max(650, 1000 - m * 0.8)) {
+          const sp = 240;
+          bolts.push({ x: e.x + Math.cos(e.aimA) * 26, y: e.y + Math.sin(e.aimA) * 26, vx: Math.cos(e.aimA) * sp, vy: Math.sin(e.aimA) * sp, t: 0, dead: false });
+          e.state = 'cool'; e.t = 0; KWAudio.play('swipe');
+        } else if (e.state === 'cool' && e.t >= 900) { e.state = 'aim'; e.t = 0; }
+      } else if (e.kind === 'zapper') {
+        const mode = zapMode(e);
+        if (mode !== e.state) { e.state = mode; if (mode === 'warn' && e.y > 0 && e.y < visH) KWAudio.play('warning'); }
+        if (mode === 'on') { const bb = bodyBox(); if (e.y + 7 > bb.y && e.y - 7 < bb.y + bb.h) hurt(e); }
       } else if (e.kind === 'hazard') {
         e.x = e.side < 0 ? C.wall + Math.max(12, e.ext) * 0.5 : W - C.wall - Math.max(12, e.ext) * 0.5;
         if (e.state === 'grow') { e.ext = e.reach * ease(clamp(e.t / 500, 0, 1)); if (e.t >= 500) e.state = 'out'; }
@@ -907,51 +944,148 @@
     }
     ents.length = keep;
   }
+  function popText(text, x, y, col, size) {
+    if (pops.length > 8) pops.shift();
+    pops.push({ text: text, x: clamp(x, 70, W - 70), y: y, t: 0, col: col, size: size || 20 });
+  }
+  function showBanner(text, sub) { banner = { text: text, sub: sub || '', t: 0 }; }
+  function isFighter(e) { return e.kind === 'creep' || e.kind === 'bat' || e.kind === 'cutter' || e.kind === 'blaster'; }
+  function fighters() { let n = 0; for (let i = 0; i < ents.length; i++) if (ents[i].alive && isFighter(ents[i])) n++; return n; }
+  function fightPlan(n) {
+    const size = Math.min(7, 2 + Math.floor(n * 0.7));
+    const plan = [];
+    let cut = false;
+    for (let i = 0; i < size; i++) {
+      let k = n === 1 ? 'creep' : choice({ creep: 46, bat: n >= 2 ? 30 : 0, blaster: n >= 3 ? 20 : 0, cutter: n >= 4 && !cut ? 10 : 0 });
+      if (k === 'cutter') cut = true;
+      plan.push(k);
+    }
+    return plan;
+  }
+  function freeY() {
+    const lo = Math.max(140, py - 170), hi = Math.min(visH - 230, py + 190);
+    let y = lo + rng() * Math.max(1, hi - lo);
+    for (let tries = 0; tries < 6; tries++) {
+      if (!ents.some(e => e.alive && (e.kind === 'creep' || e.kind === 'blaster') && Math.abs(e.y - y) < 70)) break;
+      y = lo + rng() * Math.max(1, hi - lo);
+    }
+    return y;
+  }
+  function startFight() {
+    phase = 'fight'; encN++;
+    enc = { plan: fightPlan(encN), t: 0, next: 650, cap: Math.min(4, 1 + Math.floor((encN + 1) / 2)), first: encN === 1 };
+    // obstacles from the descent step aside, so the fight is only about the fighters
+    for (const e of ents) if (e.alive && (e.kind === 'hazard' || e.kind === 'zapper')) { e.alive = false; e.t = 0; }
+    showBanner('Welle ' + encN, 'Besiege alle Gegner');
+    KWAudio.play('warning');
+  }
+  function endFight() {
+    phase = 'travel'; enc = null;
+    fightAtM = depthM() + 22 + rng() * 10;
+    const bonus = 100 * encN; score += bonus;
+    showBanner('Weiter!', '+' + bonus);
+    spawnFly(visH * 0.42, -1); spawnFly(visH * 0.58, 1);
+    KWAudio.play('ui_confirm');
+  }
+  function spawnFighter(k) {
+    if (k === 'creep') {
+      spawnCreep(freeY(), px < W / 2 ? 1 : -1, enc && enc.first);
+      if (enc) enc.first = false;
+    } else if (k === 'bat') spawnBat(clamp(py - 120 + rng() * 80, 90, visH * 0.5));
+    else if (k === 'blaster') spawnBlaster(freeY(), rng() < 0.5 ? -1 : 1);
+    else if (k === 'cutter') spawnCutter();
+    const e = ents[ents.length - 1];
+    if (e && isFighter(e)) e.fadeIn = true;
+  }
   function spawner(dt) {
     if (NO_SPAWN || state !== 'play') return;
     const m = depthM();
-    if (!firstCreep && playMs >= C.firstEnemyAtMs) {
-      firstCreep = true;
-      spawnCreep(py + 10, px < W / 2 ? 1 : -1, true);
-    }
     if (playMs >= C.firstCoinAtMs && coinChainAt === 0) { dropChain(W * 0.66, py - 10, 4, true); nextCoinM = Math.max(depthM() + 28, 28); }
-    attackAt -= 0;
-    const gap = Math.max(700, 1400 - 2 * m);
-    const cap = (m >= 300 ? 4 : m >= 150 ? 3 : m >= 40 ? 2 : 1) + (waveN % 5 === 0 && waveOn ? 1 : 0);
-    if (waveOn && playMs - attackAt >= gap && aliveAttacks() < Math.min(4, cap)) {
-      const band = m >= 300 ? 5 : m >= 150 ? 4 : m >= 70 ? 3 : m >= 30 ? 2 : m >= 20 ? 1 : 0;
-      const weights = [
-        { krabbler: 100 },
-        { krabbler: 70, fledermaus: 30 },
-        { krabbler: 55, stacheln: 20, fledermaus: 25 },
-        { krabbler: 42, stacheln: 18, fledermaus: 28, seilschneider: 12 },
-        { krabbler: 38, stacheln: 20, fledermaus: 30, seilschneider: 12 },
-        { krabbler: 34, stacheln: 22, fledermaus: 32, seilschneider: 12 }
-      ][band];
-      if (waveN === 1) { weights.fledermaus = 0; weights.stacheln = 0; weights.seilschneider = 0; }
-      const k = choice(weights);
-      const y = visH + 30;
-      if (k === 'krabbler' && creepCount() < (m < 40 ? 2 : m < 150 ? 3 : 4)) spawnCreep(y);
-      else if (k === 'fledermaus' && m >= 20) spawnBat(80 + rng() * 200);
-      else if (k === 'stacheln' && m >= 30) spawnHazard(y);
-      else if (k === 'seilschneider' && m >= 70 && !ents.some(e => e.kind === 'cutter' && e.alive) && playMs > knotLock) spawnCutter();
-      attackAt = playMs;
-    }
-    if (m >= nextCoinM) {
-      const n = 3 + ((rng() * 2) | 0);
-      dropChain(C.wall + 80 + rng() * (W - 2 * C.wall - 160), visH * 0.55, n, false);
-      nextCoinM = m + 28;
-    }
-    if (!pickup && m >= lastPickupM + C.pickupGapM) {
-      const step = Math.floor((m - (lastPickupM + C.pickupGapM)) / C.pickupEveryM);
-      if (step > pickupRoll) {
-        pickupRoll = step;
-        if (rng() < C.pickupChance && spares < C.spareMax) pickup = { x: C.wall + 40 + rng() * (W - 80 - C.wall), worldY: depthPx + visH + 20, t: 0 };
+    if (phase === 'travel') {
+      if (m >= fightAtM) { startFight(); return; }
+      // the descent between fights: wall spikes, vines and electric barriers to slip past
+      const gap = Math.max(950, 1900 - 3 * m);
+      let obstacles = 0;
+      for (const e of ents) if (e.alive && (e.kind === 'hazard' || e.kind === 'zapper') && e.y > -40) obstacles++;
+      if (encN >= 1 && playMs - attackAt >= gap && obstacles < 2 && fightAtM - m > 4) {
+        if (m >= 35 && rng() < 0.4) spawnZapper(visH + 30);
+        else spawnHazard(visH + 30);
+        attackAt = playMs;
       }
+      if (m >= nextCoinM) {
+        const n = 3 + ((rng() * 2) | 0);
+        dropChain(C.wall + 80 + rng() * (W - 2 * C.wall - 160), visH * 0.55, n, false);
+        nextCoinM = m + 28;
+      }
+      if (m >= nextFlyM) { if (hp < C.hpMax) spawnFly(visH * (0.35 + rng() * 0.3), rng() < 0.5 ? -1 : 1); nextFlyM = m + 40; }
+    } else if (enc) {
+      enc.t += dt;
+      const n = fighters();
+      if (enc.plan.length && enc.t >= enc.next && n < enc.cap) {
+        let k = enc.plan.shift();
+        if (k === 'cutter' && ents.some(e => e.kind === 'cutter' && e.alive)) k = 'creep';
+        spawnFighter(k);
+        enc.next = enc.t + Math.max(650, 1300 - 50 * encN);
+      }
+      if (enc.t > C.fightTimeoutMs) { for (const e of ents) if (e.alive && isFighter(e)) { e.alive = false; e.t = 0; } enc.plan.length = 0; }
+      if (!enc.plan.length && n === 0 && !bolts.length) endFight();
     }
-    waveT += dt;
-    const lim = waveOn ? (waveN % 5 === 0 ? 14000 : 10000) : 2500;
-    if (waveT >= lim) { waveOn = !waveOn; waveT = 0; if (waveOn) waveN++; }
+  }
+  function spawnBlaster(screenY, side) {
+    ents.push({
+      kind: 'blaster', side: side, worldY: depthPx + screenY, y: screenY, x: side < 0 ? C.wall : W - C.wall,
+      state: 'emerge', t: 0, hp: 3, alive: true, points: 40, hitT: 0, slashId: -1, aimA: side < 0 ? 0 : Math.PI
+    });
+    burst(side < 0 ? C.wall + 6 : W - C.wall - 6, screenY, 12, '#9A8F86', 150, 520, 420);
+    KWAudio.play('barrel_break');
+  }
+  function spawnZapper(screenY) {
+    ents.push({ kind: 'zapper', worldY: depthPx + screenY, y: screenY, x: W / 2, state: 'off', t: ir(0, 1300), hp: 1e9, alive: true, points: 0, hitT: 0, slashId: -1 });
+  }
+  function zapMode(e) { const c = e.t % 2600; return c < 1300 ? 'off' : c < 1750 ? 'warn' : 'on'; }
+  function spawnFly(screenY, side) {
+    flies.push({ x: side < 0 ? C.wall + 14 : W - C.wall - 14, y: screenY, vx: -side * (55 + rng() * 25), t: 0, ph: rng() * 6, got: false, gotT: 0 });
+  }
+  function eatFly(f) {
+    if (f.got) return;
+    f.got = true; f.gotT = 0;
+    if (hp < C.hpMax) { hp++; hpShowT = 1; popText('+1 Energie', px, py + 112, '#B8FF7A', 18); }
+    else { score += 50; popText('+50', px, py + 112, '#B8FF7A', 18); }
+    if (hp > 2) breakMsg = 0;
+    KWAudio.play('score_pickup', { semi: 7 });
+    burst(f.x, f.y, 8, '#D8FF6A', 90, 360, 0);
+  }
+  function updateExtras(dt) {
+    const s = dt / 1000;
+    const bb = bodyBox();
+    let k = 0;
+    for (let i = 0; i < flies.length; i++) {
+      const f = flies[i];
+      f.t += dt;
+      if (f.got) { f.gotT += dt; if (f.gotT < 300) flies[k++] = f; continue; }
+      f.x += f.vx * s;
+      if (f.x < C.wall + 14) { f.x = C.wall + 14; f.vx = Math.abs(f.vx); }
+      if (f.x > W - C.wall - 14) { f.x = W - C.wall - 14; f.vx = -Math.abs(f.vx); }
+      f.y += Math.sin(f.t / 260 + f.ph) * 40 * s - (f.t > 9000 ? 140 * s : 0);
+      if (f.x > bb.x - 14 && f.x < bb.x + bb.w + 14 && f.y > bb.y - 70 && f.y < bb.y + bb.h + 8) eatFly(f);
+      if (f.y > -30 && !f.got) flies[k++] = f;
+    }
+    flies.length = k;
+    k = 0;
+    for (let i = 0; i < bolts.length; i++) {
+      const b = bolts[i];
+      if (b.dead) continue;
+      b.t += dt; b.x += b.vx * s; b.y += b.vy * s;
+      if (Math.hypot(b.x - px, b.y - (py + 58)) < 26) { b.dead = true; hurt({ x: b.x }); burst(b.x, b.y, 8, '#FF8A4A', 110, 300, 0); continue; }
+      if (b.x < C.wall - 10 || b.x > W - C.wall + 10 || b.y < -30 || b.y > visH + 30) continue;
+      bolts[k++] = b;
+    }
+    bolts.length = k;
+    k = 0;
+    for (let i = 0; i < pops.length; i++) { const q = pops[i]; q.t += dt; if (q.t < 900) pops[k++] = q; }
+    pops.length = k;
+    if (banner) { banner.t += dt; if (banner.t > 1500) banner = null; }
+    hpShowT = Math.max(0, hpShowT - dt / 260);
   }
   function dropChain(x, screenY, n, teach) {
     coinChainAt++;
@@ -1069,8 +1203,10 @@
     playMs += dt;
     const targetScroll = state === 'portal' ? C.portalScroll : C.scroll0;
     if (state === 'play') {
-      if (portalT < C.portalLerpToScroll0Ms && scrollV < C.scroll0) scrollV = lerp(C.portalScroll, C.scroll0, portalT / C.portalLerpToScroll0Ms);
-      else scrollV = Math.min(C.scrollMax, scrollV + C.scrollAcc * dt / 1000);
+      if (phase === 'travel') cruise = Math.min(C.scrollMax, Math.max(cruise, C.scroll0) + C.scrollAcc * dt / 1000);
+      const target = phase === 'fight' ? 0 : cruise;
+      scrollV += (target - scrollV) * Math.min(1, dt / (phase === 'fight' ? 300 : 450));
+      if (scrollV < 0.5 && target === 0) scrollV = 0;
     }
     depthPx += scrollV * dt / 1000;
     const gain = Math.hypot(stickX, stickY);
@@ -1148,15 +1284,25 @@
     }
     if (slashPhase === 'windup') { slashT += dt; if (slashT >= C.swordWindup) { slashPhase = 'active'; slashT = 0; } }
     else if (slashPhase === 'active') { slashT += dt; swordHits(); if (slashT >= C.swordActive) { slashPhase = 'recover'; slashT = 0; } }
-    else if (slashPhase === 'recover') { slashT += dt; if (slashT >= C.swordRecover) slashPhase = null; }
+    else if (slashPhase === 'recover') {
+      slashT += dt;
+      if (slashT >= C.swordRecover) {
+        slashPhase = null;
+        // two landed slashes in a row arm the smash finisher; a miss or a pause resets the chain
+        if (slashSmash || !slashLanded) smashChain = 0;
+        else { smashChain = playMs - smashAt > C.smashWindowMs ? 1 : smashChain + 1; smashAt = playMs; if (smashChain >= 2) { smashReady = true; smashChain = 0; } }
+        slashSmash = false;
+      }
+    }
+    if (smashReady && playMs - smashAt > C.smashWindowMs + 1200) smashReady = false;
     slashCd = Math.max(0, slashCd - dt);
     swingCd = Math.max(0, swingCd - dt);
     invuln = Math.max(0, invuln - dt);
     impact = Math.max(0, impact - dt / 100);
     recoil *= Math.pow(0.02, dt / 180);
     if (barrel === 'equipping') { equipT += dt; if (equipT >= C.equipMs) { barrel = 'intact'; invuln = Math.max(invuln, C.equipInvuln); } }
-    barrelBtn.show = barrel === 'broken' && spares > 0;
-    if (state === 'play') { spawner(dt); updateEnts(dt); updateCoins(dt); }
+    barrelBtn.show = false;
+    if (state === 'play') { spawner(dt); updateEnts(dt); updateCoins(dt); updateExtras(dt); }
     if (pickup) {
       pickup.t += dt; const sy = pickup.worldY - depthPx;
       itemR.x = pickup.x - 16; itemR.y = sy - 18; itemR.w = 32; itemR.h = 36;
@@ -1221,15 +1367,33 @@
       if (rng() < 0.02) { queuedAction = predict(); bufUntil = queuedAction === 'locked' ? 0 : performance.now() + C.actionBufferMs; tryAction(); }
       return;
     }
+    // 'play': dodge what is about to hit, otherwise go after the nearest fighter, a firefly, or idle around
+    const pivY = py + BH / 2 - 34;
     let threat = null, bd = 1e9;
-    for (const e of ents) if (e.alive && (e.state === 'windup' || e.state === 'lunge' || e.state === 'dive')) {
-      const d = Math.abs(e.y - py); if (d < bd) { bd = d; threat = e; }
+    for (const e of ents) if (e.alive && (e.state === 'windup' || e.state === 'lunge' || e.state === 'hold' || e.state === 'dive')) {
+      const d = Math.abs(e.y - (py + 58)); if (d < bd) { bd = d; threat = e; }
     }
-    if (threat && bd < 110) setStick(0, threat.y > py + 8 ? -1 : 1, 1);
-    else if (px < W * 0.38) setStick(1, 0, 1);
+    for (const b of bolts) { const d = Math.hypot(b.x - px, b.y - (py + 58)); if (d < 90 && d < bd) { bd = d; threat = { x: b.x, y: b.y, state: 'dive' }; } }
+    for (const e of ents) if (e.alive && e.kind === 'zapper' && e.state !== 'off' && Math.abs(e.y - (py + 58)) < 70) { threat = { x: W / 2, y: e.y, state: 'zap' }; bd = 0; }
+    let goal = null, gd = 1e9;
+    for (const e of ents) if (e.alive && isFighter(e)) { const d = Math.hypot(e.x - px, e.y - pivY); if (d < gd) { gd = d; goal = e; } }
+    if (hp < C.hpMax) for (const f of flies) if (!f.got) { const d = Math.hypot(f.x - px, f.y - pivY) * 0.7; if (d < gd) { gd = d; goal = f; } }
+    if (threat && bd < 80 && threat.kind !== 'cutter') {
+      const up = threat.y > py + 58;
+      setStick(threat.x != null && threat.state !== 'zap' ? (threat.x < px ? 0.5 : -0.5) : 0, up ? -1 : 1, 1);
+    } else if (goal) {
+      const wallFoe = goal.kind === 'creep' || goal.kind === 'blaster';
+      const gx = wallFoe ? (goal.x < W / 2 ? minX() : maxX()) : goal.x;
+      const gy = (wallFoe ? goal.y + 26 : goal.y) - (BH / 2 - 34);
+      const dx = gx - px, dy = gy - py, d = Math.hypot(dx, dy);
+      if (d > 6) setStick(dx / d, dy / d, Math.min(1, d / 60)); else setStick(0, 0, 0);
+    } else if (px < W * 0.38) setStick(1, 0, 1);
     else if (px > W * 0.62) setStick(-1, 0, 1);
-    else setStick(0, (playMs / 700 | 0) % 2 ? -1 : 1, 1);
-    if (threat && Math.abs(threat.x - px) < C.swordR && Math.abs(threat.y - py) < 90) {
+    else setStick(0, (playMs / 700 | 0) % 2 ? -1 : 1, 0.6);
+    let near = false;
+    for (const e of ents) if (e.alive && (isFighter(e) || e.kind === 'mark') && Math.hypot(e.x - px, e.y - pivY) < (smashReady ? 100 : 70)) near = true;
+    for (const b of bolts) if (Math.hypot(b.x - px, b.y - pivY) < 70) near = true;
+    if (near) {
       queuedAction = predict();
       bufUntil = queuedAction === 'locked' ? 0 : performance.now() + 120;
       tryAction();
@@ -1541,7 +1705,7 @@
   function drawPlayer(alpha) {
     const x = lerpA(prev.px, px, alpha) + barrelSway();
     const y = lerpA(prev.py, py, alpha) + PIVOT_DY;
-    const hidden = barrel === 'broken' && invuln > 0 && ((invuln / 70) | 0) % 2 === 0;
+    const hidden = invuln > 0 && ((invuln / 70) | 0) % 2 === 0;
     const pop = breakPop > 0 ? 1 + Math.sin(breakPop * Math.PI) * 0.16 : 1;
     ctx.save();
     ctx.beginPath();
@@ -1599,20 +1763,21 @@
     const a0 = -Math.PI / 2;
     const a1 = slashDir > 0 ? a0 + (Math.PI / 2) * sweep : a0 - (Math.PI / 2) * sweep;
     const cx = x, cy = y + BH / 2 - 34;
-    const rad = 48;
+    const big = slashSmash;
+    const rad = big ? 80 : 48;
     ctx.save();
     ctx.beginPath();
     ctx.rect(C.wall - 1, -80, W - C.wall * 2 + 2, visH + 160);
     ctx.clip();
     ctx.translate(cx, cy);
     ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(28,168,217,0.4)';
-    ctx.lineWidth = 14;
+    ctx.strokeStyle = big ? 'rgba(255,200,60,0.45)' : 'rgba(28,168,217,0.4)';
+    ctx.lineWidth = big ? 26 : 14;
     ctx.beginPath();
     ctx.arc(0, 0, rad, a0, a1, slashDir < 0);
     ctx.stroke();
-    ctx.strokeStyle = '#4FF0FF';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = big ? '#FFF0A0' : '#4FF0FF';
+    ctx.lineWidth = big ? 7 : 4;
     ctx.beginPath();
     ctx.arc(0, 0, rad, a0, a1, slashDir < 0);
     ctx.stroke();
@@ -1832,11 +1997,124 @@
   }
   function drawEnt(e, alpha) {
     if (!e.alive) ctx.globalAlpha = clamp(1 - e.t / 600, 0, 1);
+    else if (e.fadeIn && e.t < 260) ctx.globalAlpha = e.t / 260;
+    if (!e.alive && e.smashed) {
+      // smashed enemies tumble away instead of just fading
+      ctx.save(); ctx.translate(e.x + e.vx * e.t / 1000, e.y + e.vy * e.t / 1000 + 300 * Math.pow(e.t / 1000, 2));
+      ctx.rotate(e.t / 60); ctx.translate(-e.x, -e.y);
+      if (e.kind === 'creep') drawCreep(e, alpha); else if (e.kind === 'bat') drawBat(e, alpha); else if (e.kind === 'blaster') drawBlaster(e); else if (e.kind === 'cutter') drawCutter(e, alpha);
+      ctx.restore(); ctx.globalAlpha = 1; return;
+    }
     if (e.kind === 'creep') drawCreep(e, alpha);
     else if (e.kind === 'bat') drawBat(e, alpha);
     else if (e.kind === 'hazard') drawHazard(e, alpha);
     else if (e.kind === 'cutter') drawCutter(e, alpha);
+    else if (e.kind === 'blaster') drawBlaster(e);
+    else if (e.kind === 'zapper') drawZapper(e);
     ctx.globalAlpha = 1;
+  }
+  function drawBlaster(e) {
+    const inner = e.side < 0 ? C.wall : W - C.wall, dir = e.side < 0 ? 1 : -1;
+    ctx.save();
+    // dark hole in the wall it broke out of
+    ctx.fillStyle = 'rgba(8,6,12,0.88)';
+    ctx.beginPath(); ctx.ellipse(inner, e.y, 13, 25, 0, 0, TAU); ctx.fill();
+    ctx.translate(e.x, e.y);
+    const flash = e.hitT > 0;
+    // barrel of the gun, turned toward Kiro
+    ctx.save(); ctx.rotate(e.aimA);
+    ctx.fillStyle = flash ? '#FFFFFF' : '#C08A3E'; ctx.strokeStyle = '#1C140C'; ctx.lineWidth = 3;
+    traceRound(4, -7, 26, 14, 5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#2A1E12'; ctx.beginPath(); ctx.arc(29, 0, 4, 0, TAU); ctx.fill();
+    ctx.restore();
+    // body: riveted stone-iron shell
+    ctx.fillStyle = flash ? '#FFFFFF' : '#5E5248'; ctx.strokeStyle = '#17120E'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0, 0, 17, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#8E8072';
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.7; ctx.beginPath(); ctx.arc(Math.cos(a) * 11, Math.sin(a) * 11, 2, 0, TAU); ctx.fill(); }
+    // eye charges up before each shot
+    const ch = e.state === 'aim' ? clamp(e.t / Math.max(650, 1000 - depthM() * 0.8), 0, 1) : e.state === 'cool' ? Math.max(0, 1 - e.t / 200) : 0;
+    ctx.fillStyle = 'rgba(255,90,60,' + (0.25 + 0.5 * ch) + ')';
+    ctx.beginPath(); ctx.arc(0, 0, 8 + ch * 9, 0, TAU); ctx.fill();
+    ctx.fillStyle = ch > 0.8 ? '#FFF2C8' : '#FF6A3C';
+    ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill();
+    // remaining hits
+    for (let i = 0; i < e.hp && i < 3; i++) { ctx.fillStyle = '#FFD84A'; ctx.beginPath(); ctx.arc(-dir * 4 + (i - 1) * 8 * dir, -24, 3, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawZapper(e) {
+    const mode = e.alive ? zapMode(e) : 'off';
+    const y = e.y, x0 = C.wall + 6, x1 = W - C.wall - 6;
+    ctx.save();
+    for (const x of [x0, x1]) {
+      ctx.fillStyle = '#3A4252'; ctx.strokeStyle = '#11151C'; ctx.lineWidth = 3;
+      traceRound(x - 9, y - 13, 18, 26, 5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = mode === 'off' ? '#4C6A80' : '#BFF6FF';
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, TAU); ctx.fill();
+    }
+    const now = performance.now();
+    if (mode === 'warn') {
+      if (((now / 70) | 0) % 2) {
+        ctx.strokeStyle = 'rgba(150,240,255,0.55)'; ctx.lineWidth = 2; ctx.setLineDash([6, 8]);
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); ctx.setLineDash([]);
+      }
+    } else if (mode === 'on') {
+      ctx.strokeStyle = 'rgba(90,220,255,0.35)'; ctx.lineWidth = 16;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+      ctx.strokeStyle = '#E8FDFF'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x0, y);
+      const n = 14;
+      for (let i = 1; i < n; i++) ctx.lineTo(x0 + (x1 - x0) * i / n, y + Math.sin(now / 23 + i * 2.1) * 6);
+      ctx.lineTo(x1, y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawExtras() {
+    const now = performance.now();
+    for (const f of flies) {
+      const a = f.got ? 1 - f.gotT / 300 : 1;
+      const yy = f.got ? f.y - f.gotT * 0.08 : f.y;
+      ctx.globalAlpha = a * (0.3 + 0.12 * Math.sin(now / 120 + f.ph));
+      ctx.fillStyle = '#D8FF6A';
+      ctx.beginPath(); ctx.arc(f.x, yy, 13, 0, TAU); ctx.fill();
+      ctx.globalAlpha = a * 0.85;
+      const flap = Math.abs(Math.sin(now / 35 + f.ph));
+      ctx.fillStyle = '#F4FBFF';
+      ctx.beginPath(); ctx.ellipse(f.x - 4, yy - 4, 5, 2 + flap * 3, -0.5, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(f.x + 4, yy - 4, 5, 2 + flap * 3, 0.5, 0, TAU); ctx.fill();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#F2FF9A';
+      ctx.beginPath(); ctx.arc(f.x, yy + 1, 4.5, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (const b of bolts) {
+      ctx.fillStyle = 'rgba(255,120,50,0.35)';
+      ctx.beginPath(); ctx.arc(b.x - b.vx * 0.03, b.y - b.vy * 0.03, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#FF7A3A'; ctx.beginPath(); ctx.arc(b.x, b.y, 8, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#FFF1C4'; ctx.beginPath(); ctx.arc(b.x, b.y, 3.5, 0, TAU); ctx.fill();
+    }
+  }
+  function drawPops() {
+    ctx.lineJoin = 'round';
+    for (const q of pops) {
+      const u = q.t / 900;
+      ctx.globalAlpha = clamp(1.4 - u * 1.4, 0, 1);
+      const sz = Math.round(q.size * (u < 0.15 ? 0.7 + u * 2 : 1));
+      font(sz); ctx.textAlign = 'center';
+      ctx.lineWidth = 5; ctx.strokeStyle = '#120C10';
+      ctx.strokeText(q.text, q.x, q.y - u * 40); ctx.fillStyle = q.col; ctx.fillText(q.text, q.x, q.y - u * 40);
+    }
+    ctx.globalAlpha = 1;
+    if (banner) {
+      const u = banner.t / 1500;
+      ctx.globalAlpha = clamp(Math.min(banner.t / 150, (1500 - banner.t) / 300), 0, 1);
+      const y = visH * 0.3;
+      font(34); ctx.textAlign = 'center'; ctx.lineWidth = 7; ctx.strokeStyle = '#120C10';
+      ctx.strokeText(banner.text, W / 2, y - u * 10); ctx.fillStyle = '#FFE9B0'; ctx.fillText(banner.text, W / 2, y - u * 10);
+      if (banner.sub) { font(17); ctx.textAlign = 'center'; ctx.lineWidth = 5; ctx.strokeText(banner.sub, W / 2, y + 26 - u * 10); ctx.fillStyle = '#F4F1EA'; ctx.fillText(banner.sub, W / 2, y + 26 - u * 10); }
+      ctx.globalAlpha = 1;
+    }
+    ctx.textAlign = 'left';
   }
   function drawCoinSprite(x, y, spin) {
     if (!art || !art.coin) return;
@@ -1927,16 +2205,18 @@
       ctx.restore();
     }
     drawBits(alpha);
+    drawExtras();
     drawPlayer(alpha);
     drawSword(alpha);
     // the rope cutter sits at head height on the rope, so it is drawn in front of Kiro
     for (const e of ents) if (e.kind === 'cutter') drawEnt(e, alpha);
     drawParts(alpha);
     drawDanger(alpha);
+    drawPops();
   }
   // Without the barrel the next hit ends the run: a slow red edge pulse says so, and the break itself is named.
   function drawDanger(alpha) {
-    if (barrel !== 'broken' || (state !== 'play' && state !== 'pause')) return;
+    if (hp > 2 || hp <= 0 || (state !== 'play' && state !== 'pause')) return;
     // four edge strips instead of a full-screen gradient: same look, a fraction of the pixels
     const E = 56;
     if (drawDanger.h !== visH) {
@@ -1959,17 +2239,16 @@
       ctx.lineJoin = 'round';
       ctx.lineWidth = 6;
       ctx.strokeStyle = '#1A0E10';
-      ctx.strokeText('Fass kaputt!', x, y);
+      const msg = hp === 1 ? 'Letzter Treffer!' : 'Wenig Energie!';
+      ctx.strokeText(msg, x, y);
       ctx.fillStyle = '#FFD7C2';
-      ctx.fillText('Fass kaputt!', x, y);
-      if (spares > 0) {
-        font(15);
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 5;
-        ctx.strokeText('Ersatzfass-Knopf drücken', x, y + 22);
-        ctx.fillStyle = '#FFE68A';
-        ctx.fillText('Ersatzfass-Knopf drücken', x, y + 22);
-      }
+      ctx.fillText(msg, x, y);
+      font(15);
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 5;
+      ctx.strokeText('Glühwürmchen fangen', x, y + 22);
+      ctx.fillStyle = '#E4FF8A';
+      ctx.fillText('Glühwürmchen fangen', x, y + 22);
       ctx.globalAlpha = 1;
       ctx.textAlign = 'left';
     }
@@ -2030,13 +2309,19 @@
     if (art && art.coin) ctx.drawImage(art.coin, b.coinX + 6, b.top + 4, b.h - 8, b.h - 8);
     label(String(runCoins), b.coinX + b.h + 4, b.top + b.h / 2, fs * 0.9, '#FFD84A', 'left');
     if (coinPopOn) ctx.restore();
-    const spareW = Math.min(b.coinW, 96 / cssPer);
-    const sparePop = hudPop(b.coinX, b.spareY, spareW, b.h - 2, hudSpareT);
-    const spCol = spares > 0 ? '#E8C48A' : '#8B93A6';
-    pill(b.coinX, b.spareY, spareW, b.h - 2, '#10182C', spCol);
-    if (art && art.barrelIcon) ctx.drawImage(art.barrelIcon, b.coinX + 6, b.spareY + 2, 20, 22);
-    label('x' + spares, b.coinX + 30, b.spareY + (b.h - 2) / 2, fs * 0.85, spCol, 'left');
-    if (sparePop) ctx.restore();
+    // energy: six cells, colour follows how much is left
+    const seg = 13, sgap = 3, eh = b.h - 4;
+    const ew = 12 + C.hpMax * seg + (C.hpMax - 1) * sgap;
+    const hpPop = hudPop(b.coinX, b.spareY, ew, eh, hpShowT);
+    const hcol = hp >= 4 ? '#6BE36B' : hp >= 2 ? '#FFD84A' : '#FF5A4A';
+    pill(b.coinX, b.spareY, ew, eh, '#10182C', hp <= 2 ? hcol : '#E4EEF6');
+    for (let i = 0; i < C.hpMax; i++) {
+      ctx.fillStyle = i < hp ? hcol : '#2A3348';
+      traceRound(b.coinX + 6 + i * (seg + sgap), b.spareY + 6, seg, eh - 12, 3);
+      ctx.fill();
+    }
+    if (hpPop) ctx.restore();
+    void fs;
     pill(b.depthX, b.top, b.depthW, b.h + 2, '#162033', '#EAD19B');
     label(Math.floor(depthM()) + ' m', b.depthX + b.depthW / 2, b.top + (b.h + 2) / 2, Math.max(16, 18 / cssPer), '#F7F4EC', 'center');
     const pr = camX + viewW - 46 / cssPer;
@@ -2081,7 +2366,12 @@
     const icon = predict();
     const showSwing = icon === 'swing' || (icon === 'locked' && barrel === 'intact' && atWall() && !swingPhase);
     const press = pressed ? 3 : 0;
-    disc(act.x, act.y + press, act.d / 2, pressed ? '#24304C' : (showSwing ? '#6A4424' : '#243456'), showSwing ? '#FFD84A' : '#E4EEF6');
+    if (smashReady && !showSwing) {
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 110);
+      ctx.fillStyle = 'rgba(255,214,74,' + (0.18 + 0.2 * pulse) + ')';
+      ctx.beginPath(); ctx.arc(act.x, act.y, act.d / 2 + 10 + pulse * 5, 0, TAU); ctx.fill();
+    }
+    disc(act.x, act.y + press, act.d / 2, pressed ? '#24304C' : (showSwing ? '#6A4424' : smashReady ? '#5A4416' : '#243456'), showSwing || smashReady ? '#FFD84A' : '#E4EEF6');
     if (art) {
       const ic = showSwing ? art.barrelIcon : art.katana;
       if (ic) {
@@ -2651,6 +2941,10 @@
       get actionIcon() { return predict(); },
       get actionLast() { return actionLast; },
       get spareBarrels() { return spares; },
+      get hp() { return hp; },
+      get phase() { return phase; },
+      get wave() { return encN; },
+      get smashReady() { return smashReady; },
       get joy() {
         const live = joyAnchor || { x: restX, y: restY };
         return {
@@ -2710,15 +3004,17 @@
       targetAlive: function (x, y) { return ents.some(e => e.alive && e.kind === 'mark' && Math.hypot(e.x - x, e.y - y) < 6); },
       forceBreak: function () {
         if (!DEBUG || state !== 'play') return;
-        caused = true; barrel = 'intact';
+        caused = true; invuln = 0;
         hurt({});
-        barrelBtn.show = barrel === 'broken' && spares > 0;
       },
       forceDown: function () {
         if (!DEBUG || state !== 'play') return;
-        caused = true;
+        caused = true; invuln = 0; hp = 1;
         hurt({});
-        barrelBtn.show = barrel === 'broken' && spares > 0;
+      },
+      spawnNow: function (k) {
+        if (!DEBUG || state !== 'play') return;
+        if (k === 'zapper') spawnZapper(py + 60); else if (k === 'fly') spawnFly(py, -1); else spawnFighter(k);
       },
       dropSpare: function () {
         if (!DEBUG) return;
